@@ -1,0 +1,21 @@
+version: '3.5'
+services:
+
+  serial:
+    build: ./serial
+    image: serial-reader
+    container_name: serial-reader
+    networks:
+      - equipment      
+    ports:
+      - "5011:5011"
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
+    restart: unless-stopped
+
+networks:
+  equipment:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.19.0.1/27
