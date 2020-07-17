@@ -8,16 +8,18 @@ Methods:
     get_SP - get the set point value from the instrument/sensor
     set_SP - set the set point value for the instrument/sensor
 """
-__author__ = "Brent Maranzano"
-__license__ = "MIT"
-
+import socket
 import logging
 import logging.config
 import yaml
 import coloredlogs
+from time import sleep
+from pdb import set_trace
 logger = logging.getLogger(__name__)
 
-from pdb import set_trace
+__author__ = "Brent Maranzano"
+__license__ = "MIT"
+
 
 class SerialInstrument(object):
     """Base class to abstract serial instruments. The class provides user login
@@ -34,7 +36,7 @@ class SerialInstrument(object):
     The "_update_data" method must be overloaded for inhereting classes.
     Additional methods are accessible from the "_execture_command" method.
     """
-    def  __init__(self, port="/dev/ttyUSB0"):
+    def __init__(self, port="/dev/ttyUSB0"):
         """Start logging, connect instrument, and initialize the
         instrument data to None.
         """
@@ -42,8 +44,8 @@ class SerialInstrument(object):
         self._user = None
         self._password = None
         self._data = {}
-        self._instument = self._connect_instrument(port)
-        self._socket = self._connect_socket(port)
+        self._instrument = self._connect_instrument(port)
+        #self._socket = self._connect_socket()
         self._data = self._update_data()
         logger.info("Instrument initiated")
 
@@ -58,7 +60,7 @@ class SerialInstrument(object):
             logging.basicConfig(level="default_level")
             coloredlogs.install(level="default_level")
 
-    def _connect_socket(self, ip="", port=50007):
+    def _connect_socket(self, ip="127.0.0.1", port=50007):
         """Create a local socket server.
 
         Arguments:
@@ -89,14 +91,14 @@ class SerialInstrument(object):
         """Confirm that the request is from the current user
 
         Arguments
-		request (dict): Request command and credentials.
+        request (dict): Request command and credentials.
         """
         if (self._user is None and self._password is None):
             response = {
                 "status": "ok"
             }
         elif (request["user"] == self._user
-            and request["password"] == self._password):
+              and request["password"] == self._password):
             response = {
                 "status": "ok"
             }
@@ -120,9 +122,8 @@ class SerialInstrument(object):
             }
         }
         """
-        if ("user" not in request
-            or "password" not in request
-            or "command" not in request):
+        if ("user" not in request or "password" not in request
+           or "command" not in request):
             logger.error("invalid request", extra=request)
             response = {
                 "status": "error",
@@ -141,21 +142,21 @@ class SerialInstrument(object):
                 parameters = None
             response = {
                 "status": "ok",
-                "value": {"command_name": command_name, "parameters": parameters}
+                "value": {"command_name": command_name,
+                          "parameters": parameters}
             }
         return response
 
     def _login(self, user_name, password):
         self._user = user_name
         self._password = password
-        set_trace()
-        logger.info("logged in user", user_name)
+        logger.info("logged in user {}".format(self._user))
         return {"success": "logged in user"}
 
     def _logout(self):
         self._user = None
         self._password = None
-        logger.info("logged out user", user_name)
+        logger.info("logged out user {}".format(self._user))
         return {"success": "logged out user"}
 
     def _update_data(self):
@@ -181,7 +182,7 @@ class SerialInstrument(object):
             try:
                 response = {
                     "stauts": "ok",
-                    "value": {k : self._data[parameters[k]] for k in parameters}
+                    "value": {k: self._data[parameters[k]] for k in parameters}
                 }
             except KeyError:
                 response = {
@@ -198,21 +199,58 @@ class SerialInstrument(object):
         parameters (dict|None): Dictionary of parameters for command
         TODO: put delay
         """
-        try:
-            if "parameters" is None:
-                response = getattr(self._instument, command["command_name"])()
+        error = "none"
+
+        if hasattr(self, command_name):
+            if parameters is None:
+                try:
+                    response = getattr(self, command_name)()
+                except:
+                    error = "execution"
             else:
-                response = getattr(self._instument, command["command_name"])(**parameters)
-        except AttributeError:
-            logger.error("request invalid command", extra=request)
-            response = {"status": "error", "value": "invalid request"}
-        except:
-            logger.error("error occurred when executing request command",
-                extra=request)
+                try:
+                    response = getattr(self, command_name)(**parameters)
+                except:
+                    error = "execution"
+        elif hasattr(self._instrument, command_name):
+            if parameters is None:
+                try:
+                    response = getattr(self._instrument, command_name)()
+                except:
+                    error = "execution"
+            else:
+                try:
+                    response = getattr(self._instrument,
+                                       command_name)(**parameters)
+                except:
+                    error = "execution"
+        else:
+            error = "attribute"
+
+        if error == "none":
+            logger.info(
+                "executed request command",
+                extra={"command_name": command_name, "parameters": parameters}
+            )
+            response = {
+                "status": "ok",
+                "value": "succesfully executed: {}".format(command_name)
+            }
+        elif error == "execution":
+            logger.error(
+                "error occurred when executing request command",
+                extra={"command_name": command_name, "parameters": parameters}
+            )
             response = {
                 "status": "error",
-                "value": "error occurred when executing request command: {}"
+                "value": "error executing: {}".format(command_name)
             }
+        elif error == "attribute":
+            logger.error(
+                "request invalid command",
+                extra={"command_name": command_name, "parameters": parameters}
+            )
+            response = {"status": "error", "value": "invalid request"}
 
         return response
 
@@ -221,6 +259,20 @@ class SerialInstrument(object):
 
         Arguments:
         request (dict): Request should be of form:
+            {
+                "user": user_name,
+                "password": password,
+                "command":
+                {
+                    "command_name", command_name,
+                    "parameters": parameters"
+                }
+            }
+            valid command names:
+                login
+                logout
+                get_data
+                <any other subclass methods>
         """
         # Return error response if invalid credentials
         response = self._validate_credentials(request)
@@ -239,7 +291,7 @@ class SerialInstrument(object):
         elif command_name == "logout":
             response = self._logout()
         elif command_name == "get_data":
-            response = self._get_data(request["command"])
+            response = self._get_data(parameters)
         else:
             response = self._execute_command(command_name, parameters)
 
@@ -250,8 +302,8 @@ class SerialInstrument(object):
         """
         while True:
             request = self._socket.get_request()
-			# Make sure the request is properly formatted.
+            # Make sure the request is properly formatted.
             if (self._check_request(request)
-                and self._check_credentials(request)):
-                _execute_command(request)
+               and self._check_credentials(request)):
+                self.execute_command(request)
             sleep(0.5)
