@@ -45,7 +45,7 @@ class SerialInstrument(object):
         self._password = None
         self._data = {}
         self._instrument = self._connect_instrument(port)
-        #self._socket = self._connect_socket()
+        self._socket = self._connect_socket()
         self._data = self._update_data()
         logger.info("Instrument initiated")
 
