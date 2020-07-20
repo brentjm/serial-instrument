@@ -60,7 +60,7 @@ class SerialInstrument(object):
             logging.basicConfig(level="default_level")
             coloredlogs.install(level="default_level")
 
-    def _connect_socket(self, ip="127.0.0.1", port=50007):
+    def _connect_socket(self, ip="127.0.0.1", port=5007):
         """Create a local socket server.
 
         Arguments:
