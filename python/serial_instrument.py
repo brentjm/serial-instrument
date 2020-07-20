@@ -15,6 +15,7 @@ import yaml
 import coloredlogs
 from time import sleep
 from pdb import set_trace
+from socket_server import SocketServer
 logger = logging.getLogger(__name__)
 
 __author__ = "Brent Maranzano"
@@ -45,7 +46,7 @@ class SerialInstrument(object):
         self._password = None
         self._data = {}
         self._instrument = self._connect_instrument(port)
-        self._socket = self._connect_socket()
+        self._socket = SocketServer("127.0.0.1", port)
         self._data = self._update_data()
         logger.info("Instrument initiated")
 
@@ -297,13 +298,11 @@ class SerialInstrument(object):
 
         return response
 
-    def _run(self):
-        """Run a continuous loop.
-        """
-        while True:
-            request = self._socket.get_request()
-            # Make sure the request is properly formatted.
-            if (self._check_request(request)
-               and self._check_credentials(request)):
-                self.execute_command(request)
-            sleep(0.5)
+    def run(self):
+        try:
+            while True:
+                self._socket.run()
+        except KeyboardInterrupt:
+            print("caught keyboard interrupt, exiting")
+        finally:
+            self._sel.close()
