@@ -46,7 +46,7 @@ class SerialInstrument(object):
         self._password = None
         self._data = {}
         self._instrument = self._connect_instrument(port)
-        self._socket = SocketServer("127.0.0.1", port)
+        self._socket = SocketServer("127.0.0.1", port, self._process_request)
         self._data = self._update_data()
         logger.info("Instrument initiated")
 
@@ -298,11 +298,26 @@ class SerialInstrument(object):
 
         return response
 
-    def run(self):
-        try:
-            while True:
-                self._socket.run()
-        except KeyboardInterrupt:
-            print("caught keyboard interrupt, exiting")
-        finally:
-            self._sel.close()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="instrument server")
+    parser.add_argument(
+        "--host",
+        help="host address for the socket to bind",
+        type=str,
+        default="127.0.0.1"
+    )
+    parser.add_argument(
+        "--port",
+        help="port number for the socket server",
+        type=int,
+        default=5007
+    )
+    parser.add_argument(
+        "--instrument-port",
+        help="port for instrument",
+        type=str,
+        default="/dev/ttyUSB0"
+    )
+    args = parser.parse_args()
+    instrument_server = SerialInstrument(args.host, args.port, args.instrument-port)

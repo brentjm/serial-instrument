@@ -14,7 +14,6 @@ import socket
 import selectors
 import traceback
 import argparse
-from instruments.bronkhorst import Bronkhorst
 
 import libserver
 from pdb import set_trace
@@ -22,15 +21,17 @@ from pdb import set_trace
 class SocketServer(object):
     """Socket server using selectors to accept incoming client messages. Upon
     receiving a client connection, creates a message handler (class Message
-    from libserver), which it provides the selector and socket information
-    (connection and address) for processing further events.
+    from libserver), which it provides the selector, socket information
+    (connection and address), and  for processing further events.
 
     Based off of code from:
     https://github.com/realpython/materials/blob/master/python-sockets-tutorial/libclient.py
     https://realpython.com/python-sockets/
     """
-    def __init__(self, host, port):
+    def __init__(self, host, port, request_handler):
         self._lsock, self._sel = self._setup_socket(host, port)
+        self._request_handler = request_handler
+        self.run()
 
     def _setup_socket(self, host, port):
         """Setup the starting socket to listen for connections.
@@ -51,25 +52,28 @@ class SocketServer(object):
         conn, addr = sock.accept()  # Should be ready to read
         print("accepted connection from", addr)
         conn.setblocking(False)
-        message = libserver.Message(self._sel, conn, addr)
+        message = libserver.Message(self._sel, conn, addr, self._request_handler)
         self._sel.register(conn, selectors.EVENT_READ, data=message)
 
     def run(self):
         try:
-            events = self._sel.select(timeout=None)
-            for key, mask in events:
-                if key.data is None:
-                    self._accept_wrapper(key.fileobj)
-                else:
-                    message = key.data
-                    try:
-                        message.process_events(mask)
-                    except Exception:
-                        print(
-                            "main: error: exception for",
-                            f"{message.addr}:\n{traceback.format_exc()}",
-                        )
-                        message.close()
+            while True:
+                print("waiting for event")
+                events = self._sel.select(timeout=None)
+                print("received connection")
+                for key, mask in events:
+                    if key.data is None:
+                        self._accept_wrapper(key.fileobj)
+                    else:
+                        message = key.data
+                        try:
+                            message.process_events(mask)
+                        except Exception:
+                            print(
+                                "main: error: exception for",
+                                f"{message.addr}:\n{traceback.format_exc()}",
+                            )
+                            message.close()
         except KeyboardInterrupt:
             print("caught keyboard interrupt, exiting")
         finally:
@@ -90,4 +94,7 @@ if __name__ == "__main__":
         default=5007
     )
     args = parser.parse_args()
-    socket_server = SocketServer(args.host, args.port)
+    def request_handler(request):
+        set_trace()
+        return {"status": "ok"}
+    socket_server = SocketServer(args.host, args.port, request_handler)

@@ -3,10 +3,10 @@ import selectors
 import json
 import io
 import struct
-
+from pdb import set_trace
 
 class Message:
-    def __init__(self, selector, sock, addr, request):
+    def __init__(self, selector, sock, addr, request, response_handler):
         self.selector = selector
         self.sock = sock
         self.addr = addr
@@ -17,6 +17,7 @@ class Message:
         self._jsonheader_len = None
         self.jsonheader = None
         self.response = None
+        self._response_handler = response_handler
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -81,9 +82,7 @@ class Message:
         return message
 
     def _process_response_json_content(self):
-        content = self.response
-        result = content.get("result")
-        print(f"got result: {result}")
+        self._response_handler(self.response)
 
     def _process_response_binary_content(self):
         content = self.response

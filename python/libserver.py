@@ -5,17 +5,12 @@ import io
 import struct
 from pdb import set_trace
 
-request_search = {
-    "morpheus": "Follow the white rabbit. \U0001f430",
-    "ring": "In the caves beneath the Misty Mountains. \U0001f48d",
-    "\U0001f436": "\U0001f43e Playing ball! \U0001f3d0",
-}
-
 
 class Message:
     """Accepts incoming messages from socket clients, parses them, and then
-    sends the requested instrument command to the underlying instrument. Thus,
-    providing a unified ethernet interface to all equipment. The message format
+    uses the supplied class attribute callback to call a handler for the request.
+    If the callback belongs to an instrument command handler, the combination provides
+    a unified ethernet interface to all equipment. The message format
     should follow the form:
         -   Fixed length header (2 bytes, big-endian) that defines the length of
             the following JSON header
@@ -25,10 +20,8 @@ class Message:
                 - Length
         -   Variable length content (specified by the JSON header).
         (see https://realpython.com/python-sockets/#application-protocol-header)
-
-    Note that the class attribute "instrument" must point to the connected instrument.
     """
-    def __init__(self, selector, sock, addr, instrument):
+    def __init__(self, selector, sock, addr, request_handler):
         self.selector = selector
         self.sock = sock
         self.addr = addr
@@ -38,7 +31,7 @@ class Message:
         self.jsonheader = None
         self.request = None
         self.response_created = False
-        self.instrument = instrument
+        self._request_handler = request_handler
 
     def _set_selector_events_mask(self, mode):
         """Set selector to listen for events: mode is 'r', 'w', or 'rw'."""
@@ -106,16 +99,7 @@ class Message:
         return message
 
     def _create_response_json_content(self):
-        content = self.instrument.process_request(json.loads(self.request["value"]))
-        """
-        action = self.request.get("action")
-        if action == "search":
-            query = self.request.get("value")
-            answer = request_search.get(query) or f'No match for "{query}".'
-            content = {"result": answer}
-        else:
-            content = {"result": f'Error: invalid action "{action}".'}
-        """
+        content = {"status": "ok"}
         content_encoding = "utf-8"
         response = {
             "content_bytes": self._json_encode(content, content_encoding),
