@@ -58,7 +58,7 @@ class Bronkhorst(SerialInstrument):
 
 
 def test():
-    bronkhorst = Bronkhorst("/dev/ttyUSB0", "127.0.0.1", 5007)
+    bronkhorst = Bronkhorst("/dev/ttyUSB0", "172.19.0.2", 5007)
     request = {"user": "unique_user", "password": "123"}
 
     print("test login")

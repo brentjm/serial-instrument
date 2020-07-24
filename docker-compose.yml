@@ -1,14 +1,14 @@
 version: '3.5'
 services:
 
-  serial:
-    build: ./serial
-    image: serial-reader
-    container_name: serial-reader
+  socket:
+    build: ./socket
+    image: serial-socket
+    container_name: serial-socket
     networks:
       - equipment      
     ports:
-      - "5011:5011"
+      - "5007:5007"
     devices:
       - "/dev/ttyUSB0:/dev/ttyUSB0"
     restart: unless-stopped
