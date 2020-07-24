@@ -9,6 +9,7 @@ Methods:
     set_SP - set the set point value for the instrument/sensor
 """
 import socket
+import argparse
 import logging
 import logging.config
 import yaml
@@ -37,16 +38,15 @@ class SerialInstrument(object):
     The "_update_data" method must be overloaded for inhereting classes.
     Additional methods are accessible from the "_execture_command" method.
     """
-    def __init__(self, port="/dev/ttyUSB0"):
+    def __init__(self, instrument_port, socket_ip, socket_port):
         """Start logging, connect instrument, and initialize the
-        instrument data to None.
-        """
+        instrument data to None.  """
         self._setup_logger()
         self._user = None
         self._password = None
         self._data = {}
-        self._instrument = self._connect_instrument(port)
-        self._socket = SocketServer("127.0.0.1", port, self._process_request)
+        self._instrument = self._connect_instrument(instrument_port)
+        self._socket = SocketServer(socket_ip, socket_port, self.process_request)
         self._data = self._update_data()
         logger.info("Instrument initiated")
 
@@ -275,6 +275,7 @@ class SerialInstrument(object):
                 get_data
                 <any other subclass methods>
         """
+        set_trace()
         # Return error response if invalid credentials
         response = self._validate_credentials(request)
         if response["status"] == "error":
@@ -302,22 +303,22 @@ class SerialInstrument(object):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="instrument server")
     parser.add_argument(
-        "--host",
+        "--socket_ip",
         help="host address for the socket to bind",
         type=str,
         default="127.0.0.1"
     )
     parser.add_argument(
-        "--port",
+        "--socket_port",
         help="port number for the socket server",
         type=int,
         default=5007
     )
     parser.add_argument(
-        "--instrument-port",
+        "--instrument_port",
         help="port for instrument",
         type=str,
         default="/dev/ttyUSB0"
     )
     args = parser.parse_args()
-    instrument_server = SerialInstrument(args.host, args.port, args.instrument-port)
+    instrument_server = SerialInstrument(args.instrument_port, args.socket_ip, args.socket_port)

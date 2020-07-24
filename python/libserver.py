@@ -99,7 +99,7 @@ class Message:
         return message
 
     def _create_response_json_content(self):
-        content = {"status": "ok"}
+        content = self._request_handler(self.request)
         content_encoding = "utf-8"
         response = {
             "content_bytes": self._json_encode(content, content_encoding),
