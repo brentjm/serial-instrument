@@ -12,6 +12,7 @@ import socket
 import argparse
 import logging
 import logging.config
+import json
 import yaml
 import coloredlogs
 from time import sleep
@@ -275,7 +276,12 @@ class SerialInstrument(object):
                 get_data
                 <any other subclass methods>
         """
-        set_trace()
+        if type(request) is str:
+            request = json.loads(request)
+        elif type(request) is not dict:
+            logger.error("invalid request type", extra=request)
+            return {"status": "error", "description": "invalid request type"}
+
         # Return error response if invalid credentials
         response = self._validate_credentials(request)
         if response["status"] == "error":

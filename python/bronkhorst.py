@@ -22,8 +22,8 @@ class Bronkhorst(SerialInstrument):
         https://pypi.org/project/bronkhorst-propar/
         https://pypi.org/project/bronkhorst-propar/
     """
-    def __init__(self, port="/dev/ttyUSB0"):
-        super().__init__(port=port)
+    def __init__(self, instrument_port, socket_ip, socket_port):
+        super().__init__(instrument_port, socket_ip, socket_port)
 
     def _connect_instrument(self, port):
         """Connect to the instrument serial port.
@@ -58,7 +58,7 @@ class Bronkhorst(SerialInstrument):
 
 
 def test():
-    bronkhorst = Bronkhorst()
+    bronkhorst = Bronkhorst("/dev/ttyUSB0", "127.0.0.1", 5007)
     request = {"user": "unique_user", "password": "123"}
 
     print("test login")
