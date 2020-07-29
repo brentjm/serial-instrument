@@ -85,7 +85,7 @@ if __name__ == "__main__":
         "--host",
         help="host address for the socket to bind",
         type=str,
-        default="127.0.0.1"
+        default="*"
     )
     parser.add_argument(
         "--port",

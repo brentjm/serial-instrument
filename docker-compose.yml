@@ -2,7 +2,7 @@ version: '3.5'
 services:
 
   socket:
-    build: ./socket
+    build: ./serial-socket
     image: serial-socket
     container_name: serial-socket
     networks:
