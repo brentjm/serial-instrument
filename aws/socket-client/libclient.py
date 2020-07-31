@@ -6,11 +6,11 @@ import struct
 from pdb import set_trace
 
 class Message:
-    def __init__(self, selector, sock, addr, request, response_handler):
+    def __init__(self, selector, sock, addr, response_handler):
         self.selector = selector
         self.sock = sock
         self.addr = addr
-        self.request = request
+        self.request = None
         self._recv_buffer = b""
         self._send_buffer = b""
         self._request_queued = False
@@ -109,6 +109,7 @@ class Message:
                 self.process_response()
 
     def write(self):
+        set_trace()
         if not self._request_queued:
             self.queue_request()
 
@@ -204,4 +205,5 @@ class Message:
             )
             self._process_response_binary_content()
         # Close when response has been processed
-        self.close()
+#        self.close()
+        self._set_selector_events_mask("w")

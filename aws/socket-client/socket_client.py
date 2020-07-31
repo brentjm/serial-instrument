@@ -20,6 +20,7 @@ class SocketClient(object):
     def __init__(self, host, port, response_handler):
         self._sock, self._addr = self._start_connection(host, port)
         self._response_handler = response_handler
+        self._register_selector()
 
     @classmethod
     def send(cls, host, port, request, callback):
@@ -36,6 +37,31 @@ class SocketClient(object):
         sock.connect_ex(addr)
         return sock, addr
 
+    def _register_selector(self):
+        events = selectors.EVENT_READ | selectors.EVENT_WRITE
+        self.message = libclient.Message(sel, self._sock, self._addr, self._response_handler)
+        sel.register(self._sock, events, data=self.message)
+
+    def close(self):
+        try:
+            self.sel.unregister(self.sock)
+        except Exception as e:
+            print(
+                "error: selector.unregister() exception for",
+                f"{self.addr}: {repr(e)}",
+            )
+        try:
+            self._sock.close()
+        except OSError as e:
+            print(
+                "error: socket.close() exception for",
+                f"{self.addr}: {repr(e)}",
+            )
+        finally:
+            # Delete reference to socket object for garbage collection
+            self._sock = None
+        sel.close()
+
     def send_request(self, request, encoding="utf-8"):
         if encoding == "utf-8":
             request = dict(
@@ -49,10 +75,40 @@ class SocketClient(object):
                 encoding="binary",
                 content=bytes(request, encoding="utf-8"),
             )
-        events = selectors.EVENT_READ | selectors.EVENT_WRITE
-        message = libclient.Message(sel, self._sock, self._addr, request, self._response_handler)
-        sel.register(self._sock, events, data=message)
-        self._run()
+#   Moved to _register_selector
+#        events = selectors.EVENT_READ | selectors.EVENT_WRITE
+#        message = libclient.Message(sel, self._sock, self._addr, request, self._response_handler)
+#        sel.register(self._sock, events, data=message)
+        self.message.request = request
+        sel.modify(self._sock, selectors.EVENT_WRITE, data=self.message)
+        try:
+            events = sel.select(timeout=5)
+            for key, mask in events:
+                message = key.data
+                try:
+                    message.write()
+                except Exception:
+                    print(
+                        "main: error: exception for",
+                        f"{message.addr}:\n{traceback.format_exc()}",
+                    )
+                    message.close()
+
+            sel.modify(self._sock, selectors.EVENT_READ, data=self.message)
+            events = sel.select(timeout=5)
+            for key, mask in events:
+                message = key.data
+                try:
+                    message.read()
+                except Exception:
+                    print(
+                        "main: error: exception for",
+                        f"{message.addr}:\n{traceback.format_exc()}",
+                    )
+                    message.close()
+        except KeyboardInterrupt:
+            print("caught keyboard interrupt, exiting")
+
 
     def _run(self):
         try:
@@ -60,6 +116,7 @@ class SocketClient(object):
                 events = sel.select(timeout=1)
                 for key, mask in events:
                     message = key.data
+                    set_trace()
                     try:
                         message.process_events(mask)
                     except Exception:
@@ -69,12 +126,13 @@ class SocketClient(object):
                         )
                         message.close()
                 # Check for a socket being monitored to continue.
-                if not sel.get_map():
-                    break
+#                if not sel.get_map():
+#                    break
         except KeyboardInterrupt:
             print("caught keyboard interrupt, exiting")
         finally:
-            sel.close()
+#            sel.close()
+            pass
 
 
 if __name__ == "__main__":
