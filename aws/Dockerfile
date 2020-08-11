@@ -11,4 +11,3 @@ WORKDIR /home/aws/python
 CMD ["/bin/bash", "-c", "sleep 10000"]
 #CMD ["python", "mqtt_client.py"] 
 CMD ["/bin/bash", "-c", "sleep 1000000000"]
-
