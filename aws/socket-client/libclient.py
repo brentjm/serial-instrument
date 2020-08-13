@@ -6,6 +6,23 @@ import struct
 from pdb import set_trace
 
 class Message:
+    """Message object to send data to a socket. The Message object
+    expects a data object that is a dictionary with keys:
+        type (str): "text/json" | "binary/custom-client-binary-type"
+        encoding (str): "utf-8" | "binary"
+        content: string to be sent (utf-8 encoded)
+    The class wraps the original data into a byte sequence that has the format:
+        header - first 2 bytes that specify the length of the JSON header
+        JSON header - dictionary that defines the content:
+            type, encoding, number of bytes, byte order
+        content - bytes
+    Thus, the 2 byte header defines the the length of the JSON header, so that the server
+    can read the header from which the defines how ther server should read
+    the data content.
+    Based from code:
+    https://github.com/realpython/materials/blob/master/python-sockets-tutorial/libclient.py
+    https://realpython.com/python-sockets/
+    """
     def __init__(self, selector, sock, addr, response_handler):
         self.selector = selector
         self.sock = sock
@@ -16,11 +33,8 @@ class Message:
         self._request_queued = False
         self._jsonheader_len = None
         self.jsonheader = None
-        self.response = None
+        self.content = None
         self._response_handler = response_handler
-
-    def _json_encode(self, obj, encoding):
-        return json.dumps(obj, ensure_ascii=False).encode(encoding)
 
     def _json_decode(self, json_bytes, encoding):
         tiow = io.TextIOWrapper(
@@ -30,55 +44,42 @@ class Message:
         tiow.close()
         return obj
 
-    def _make_request(self):
-        content = self.request["content"]
-        content_type = self.request["type"]
-        content_encoding = self.request["encoding"]
-        if content_type == "text/json":
-            req = {
-                "content_bytes": self._json_encode(content, content_encoding),
-                "content_type": content_type,
-                "content_encoding": content_encoding,
-            }
-        else:
-            req = {
-                "content_bytes": content,
-                "content_type": content_type,
-                "content_encoding": content_encoding,
-            }
-        return req
+    def _create_message(self, request):
+        """Create the message (2 byte header + JSON header + content).
 
-    def _create_message(
-        self, *, content_bytes, content_type, content_encoding
-    ):
+        Arguments:
+        request (dict): request to send to the socket
+
+        Returns (bytes) Message to send to socket.
+        """
         jsonheader = {
             "byteorder": sys.byteorder,
-            "content-type": content_type,
-            "content-encoding": content_encoding,
-            "content-length": len(content_bytes),
+            "content-type": request["type"],
+            "content-encoding": request["encoding"],
+            "content-length": len(request["content"]),
         }
-        jsonheader_bytes = self._json_encode(jsonheader, "utf-8")
+        jsonheader_bytes = json.dumps(jsonheader, ensure_ascii=False).encode("utf-8")
         message_hdr = struct.pack(">H", len(jsonheader_bytes))
-        message = message_hdr + jsonheader_bytes + content_bytes
+        message = message_hdr + jsonheader_bytes + request["content"]
         return message
 
     def _write(self):
         """Write the send buffer (self._send_buffer) to the socket.
         """
         print("sending", repr(self._send_buffer), "to", self.addr)
-        try:
-            # Should be ready to write
-            sent = self.sock.send(self._send_buffer)
-        except BlockingIOError:
-            # Resource temporarily unavailable (errno EWOULDBLOCK)
-            pass
-        else:
-            self._send_buffer = self._send_buffer[sent:]
+        # Loop until the entire send buffer is empty.
+        while self._send_buffer:
+            try:
+                # Should be ready to write
+                sent = self.sock.send(self._send_buffer)
+            except BlockingIOError:
+                # Resource temporarily unavailable (errno EWOULDBLOCK)
+                pass
+            else:
+                self._send_buffer = self._send_buffer[sent:]
 
     def _read(self):
-        """Read from the socket. Add any read data to the receive buffer
-        self._recv_buffer.
-        """
+        """Read from the socket until the entire message can be processed."""
         try:
             # Should be ready to read
             data = self.sock.recv(4096)
@@ -90,6 +91,25 @@ class Message:
                 self._recv_buffer += data
             else:
                 raise RuntimeError("Peer closed.")
+
+        # Loop until the message content has been processed.
+        while self.content is None:
+            # If the message proto header (2 bytes) has not been processed,
+            # try to process it.
+            if self._jsonheader_len is None:
+                self.process_protoheader()
+
+            # If the JSON header length is set, but the JSON header has not
+            # been read, try to process it.
+            if self._jsonheader_len is not None:
+                if self.jsonheader is None:
+                    self.process_jsonheader()
+
+            # If the JSON header has been read, but the content has not been
+            # processed, try reading the remainder of the message.
+            if self.jsonheader:
+                if self.content is None:
+                    self.process_content()
 
     def process_protoheader(self):
         """Checks to see if 2 bytes are available in the receive buffer
@@ -124,7 +144,7 @@ class Message:
                 if reqhdr not in self.jsonheader:
                     raise ValueError(f'Missing required header "{reqhdr}".')
 
-    def process_response(self):
+    def process_content(self):
         content_len = self.jsonheader["content-length"]
         if not len(self._recv_buffer) >= content_len:
             return
@@ -132,71 +152,42 @@ class Message:
         self._recv_buffer = self._recv_buffer[content_len:]
         if self.jsonheader["content-type"] == "text/json":
             encoding = self.jsonheader["content-encoding"]
-            self.response = self._json_decode(data, encoding)
-            print("received response", repr(self.response), "from", self.addr)
-            self._process_response_json_content()
+            self.content = self._json_decode(data, encoding)
+            print("received response", repr(self.content), "from", self.addr)
         else:
             # Binary or unknown content-type
-            self.response = data
+            self.content = data
             print(
                 f'received {self.jsonheader["content-type"]} response from',
                 self.addr,
             )
-            self._process_response_binary_content()
-        # Close when response has been processed
 
     def _process_response_json_content(self):
-        self._response_handler(self.response)
+        self._response_handler(self.content)
 
     def _process_response_binary_content(self):
-        content = self.response
+        content = self.content
         print(f"got response: {repr(content)}")
 
-    def write(self):
-        req = self._make_request()
-        message = self._create_message(**req)
+    def write(self, request):
+        """Create the message from the request and call the method to write to
+        socket.
+
+        Arguments:
+        request (bytes): The request/message to write to the socket.
+        """
+        message = self._create_message(request)
         self._send_buffer = message
-        while self._send_buffer:
-            self._write()
+        self._write()
 
     def read(self):
-        # Read 4096 bytes or end of buffer
+        """Read the message and then call the response handler on the message
+        content.
+        """
         self._read()
 
-        # If the message proto header (2 bytes) has not been processed,
-        # try to process it.
-        if self._jsonheader_len is None:
-            self.process_protoheader()
-
-        # If the JSON header length is set, but the JSON header has not
-        # been read, try to process it.
-        if self._jsonheader_len is not None:
-            if self.jsonheader is None:
-                self.process_jsonheader()
-
-        # If the JSON header has been read, but the response has not been
-        # processed, try reading the remainder of the message.
-        if self.jsonheader:
-            if self.response is None:
-                self.process_response()
-
-    def close(self):
-        print("closing connection to", self.addr)
-        try:
-            self.selector.unregister(self.sock)
-        except Exception as e:
-            print(
-                "error: selector.unregister() exception for",
-                f"{self.addr}: {repr(e)}",
-            )
-
-        try:
-            self.sock.close()
-        except OSError as e:
-            print(
-                "error: socket.close() exception for",
-                f"{self.addr}: {repr(e)}",
-            )
-        finally:
-            # Delete reference to socket object for garbage collection
-            self.sock = None
+        # Execute the callback (response_handler) on the content.
+        if self.jsonheader["content-type"] == "text/json":
+            self._process_response_json_content()
+        else:
+            self._process_response_binary_content()
