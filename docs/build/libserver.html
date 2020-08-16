@@ -1,0 +1,169 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>libserver module &#8212; socketserver 0.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-libserver">
+<span id="libserver-module"></span><h1>libserver module<a class="headerlink" href="#module-libserver" title="Permalink to this headline">¶</a></h1>
+<dl class="py class">
+<dt id="libserver.Message">
+<em class="property">class </em><code class="sig-prename descclassname">libserver.</code><code class="sig-name descname">Message</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">selector</span></em>, <em class="sig-param"><span class="n">sock</span></em>, <em class="sig-param"><span class="n">addr</span></em>, <em class="sig-param"><span class="n">request_handler</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libserver.html#Message"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libserver.Message" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Accepts incoming messages from socket clients, parses them, and then
+uses the supplied class attribute callback to call a handler for the request.
+If the callback belongs to an instrument command handler, the combination provides
+a unified ethernet interface to all equipment. The message format
+should follow the form:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Fixed length header (2 bytes, big-endian) that defines the length of
+the following JSON header</p></li>
+<li><dl class="simple">
+<dt>Variable JSON header (UTF-8 encoded) that defines the content body:</dt><dd><ul>
+<li><p>Type</p></li>
+<li><p>Encoding</p></li>
+<li><p>Length</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>Variable length content (specified by the JSON header).</p></li>
+</ul>
+<p>(see <a class="reference external" href="https://realpython.com/python-sockets/#application-protocol-header">https://realpython.com/python-sockets/#application-protocol-header</a>)</p>
+</div></blockquote>
+<dl class="py method">
+<dt id="libserver.Message.close">
+<code class="sig-name descname">close</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libserver.html#Message.close"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libserver.Message.close" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="libserver.Message.create_response">
+<code class="sig-name descname">create_response</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libserver.html#Message.create_response"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libserver.Message.create_response" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="libserver.Message.process_events">
+<code class="sig-name descname">process_events</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">mask</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libserver.html#Message.process_events"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libserver.Message.process_events" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="libserver.Message.process_jsonheader">
+<code class="sig-name descname">process_jsonheader</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libserver.html#Message.process_jsonheader"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libserver.Message.process_jsonheader" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="libserver.Message.process_protoheader">
+<code class="sig-name descname">process_protoheader</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libserver.html#Message.process_protoheader"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libserver.Message.process_protoheader" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="libserver.Message.process_request">
+<code class="sig-name descname">process_request</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libserver.html#Message.process_request"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libserver.Message.process_request" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="libserver.Message.read">
+<code class="sig-name descname">read</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libserver.html#Message.read"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libserver.Message.read" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="libserver.Message.write">
+<code class="sig-name descname">write</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libserver.html#Message.write"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libserver.Message.write" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">socketserver</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Brent.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/libserver.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

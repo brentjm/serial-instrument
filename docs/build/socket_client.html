@@ -1,0 +1,135 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>socket_client module &#8212; socketserver 0.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-socket_client">
+<span id="socket-client-module"></span><h1>socket_client module<a class="headerlink" href="#module-socket_client" title="Permalink to this headline">¶</a></h1>
+<dl class="py class">
+<dt id="socket_client.SocketClient">
+<em class="property">class </em><code class="sig-prename descclassname">socket_client.</code><code class="sig-name descname">SocketClient</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">host</span></em>, <em class="sig-param"><span class="n">port</span></em>, <em class="sig-param"><span class="n">response_handler</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/socket_client.html#SocketClient"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#socket_client.SocketClient" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Client to communicate to custom socket server.</p>
+<p>Based off of code from:
+<a class="reference external" href="https://github.com/realpython/materials/blob/master/python-sockets-tutorial/libclient.py">https://github.com/realpython/materials/blob/master/python-sockets-tutorial/libclient.py</a>
+<a class="reference external" href="https://realpython.com/python-sockets/">https://realpython.com/python-sockets/</a></p>
+<p>Class attributes:</p>
+<dl class="py method">
+<dt id="socket_client.SocketClient.close">
+<code class="sig-name descname">close</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/socket_client.html#SocketClient.close"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#socket_client.SocketClient.close" title="Permalink to this definition">¶</a></dt>
+<dd><p>Close the selector and socket.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="socket_client.SocketClient.read_response">
+<code class="sig-name descname">read_response</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/socket_client.html#SocketClient.read_response"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#socket_client.SocketClient.read_response" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read the response from the socket.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="socket_client.SocketClient.send_request">
+<code class="sig-name descname">send_request</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">request</span></em>, <em class="sig-param"><span class="n">encoding</span><span class="o">=</span><span class="default_value">'utf-8'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/socket_client.html#SocketClient.send_request"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#socket_client.SocketClient.send_request" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create the request object, set the selector to write,
+and wait for the socket to be writable. Once writable, execute
+the message write.</p>
+<p>Arguments:
+request (str): String to send to the socket server.
+encoding (optional - str): Encoding to use for request content.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">socketserver</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Brent.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/socket_client.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

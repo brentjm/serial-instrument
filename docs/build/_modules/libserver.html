@@ -1,0 +1,318 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>libserver &#8212; socketserver 0.1 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for libserver</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">selectors</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">io</span>
+<span class="kn">import</span> <span class="nn">struct</span>
+<span class="kn">from</span> <span class="nn">pdb</span> <span class="kn">import</span> <span class="n">set_trace</span>
+
+
+<div class="viewcode-block" id="Message"><a class="viewcode-back" href="../libserver.html#libserver.Message">[docs]</a><span class="k">class</span> <span class="nc">Message</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Accepts incoming messages from socket clients, parses them, and then</span>
+<span class="sd">    uses the supplied class attribute callback to call a handler for the request.</span>
+<span class="sd">    If the callback belongs to an instrument command handler, the combination provides</span>
+<span class="sd">    a unified ethernet interface to all equipment. The message format</span>
+<span class="sd">    should follow the form:</span>
+<span class="sd">        -   Fixed length header (2 bytes, big-endian) that defines the length of</span>
+<span class="sd">            the following JSON header</span>
+<span class="sd">        -   Variable JSON header (UTF-8 encoded) that defines the content body:</span>
+<span class="sd">                - Type</span>
+<span class="sd">                - Encoding</span>
+<span class="sd">                - Length</span>
+<span class="sd">        -   Variable length content (specified by the JSON header).</span>
+<span class="sd">        (see https://realpython.com/python-sockets/#application-protocol-header)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">selector</span><span class="p">,</span> <span class="n">sock</span><span class="p">,</span> <span class="n">addr</span><span class="p">,</span> <span class="n">request_handler</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">selector</span> <span class="o">=</span> <span class="n">selector</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sock</span> <span class="o">=</span> <span class="n">sock</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">addr</span> <span class="o">=</span> <span class="n">addr</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_buffer</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_jsonheader_len</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jsonheader</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">request</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">response_created</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_request_handler</span> <span class="o">=</span> <span class="n">request_handler</span>
+
+    <span class="k">def</span> <span class="nf">_set_selector_events_mask</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mode</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Set selector to listen for events: mode is &#39;r&#39;, &#39;w&#39;, or &#39;rw&#39;.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;r&quot;</span><span class="p">:</span>
+            <span class="n">events</span> <span class="o">=</span> <span class="n">selectors</span><span class="o">.</span><span class="n">EVENT_READ</span>
+        <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;w&quot;</span><span class="p">:</span>
+            <span class="n">events</span> <span class="o">=</span> <span class="n">selectors</span><span class="o">.</span><span class="n">EVENT_WRITE</span>
+        <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;rw&quot;</span><span class="p">:</span>
+            <span class="n">events</span> <span class="o">=</span> <span class="n">selectors</span><span class="o">.</span><span class="n">EVENT_READ</span> <span class="o">|</span> <span class="n">selectors</span><span class="o">.</span><span class="n">EVENT_WRITE</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid events mask mode </span><span class="si">{</span><span class="nb">repr</span><span class="p">(</span><span class="n">mode</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">selector</span><span class="o">.</span><span class="n">modify</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sock</span><span class="p">,</span> <span class="n">events</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_read</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># Should be ready to read</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">4096</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">BlockingIOError</span><span class="p">:</span>
+            <span class="c1"># Resource temporarily unavailable (errno EWOULDBLOCK)</span>
+            <span class="k">pass</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span> <span class="o">+=</span> <span class="n">data</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Peer closed.&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_write</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_buffer</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;sending&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_send_buffer</span><span class="p">),</span> <span class="s2">&quot;to&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">addr</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="c1"># Should be ready to write</span>
+                <span class="n">sent</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sock</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_send_buffer</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">BlockingIOError</span><span class="p">:</span>
+                <span class="c1"># Resource temporarily unavailable (errno EWOULDBLOCK)</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_send_buffer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_buffer</span><span class="p">[</span><span class="n">sent</span><span class="p">:]</span>
+                <span class="c1"># Close when the buffer is drained. The response has been sent.</span>
+                <span class="k">if</span> <span class="n">sent</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_send_buffer</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_json_encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">encoding</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">ensure_ascii</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">encoding</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_json_decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">json_bytes</span><span class="p">,</span> <span class="n">encoding</span><span class="p">):</span>
+        <span class="n">tiow</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">TextIOWrapper</span><span class="p">(</span>
+            <span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="n">json_bytes</span><span class="p">),</span> <span class="n">encoding</span><span class="o">=</span><span class="n">encoding</span><span class="p">,</span> <span class="n">newline</span><span class="o">=</span><span class="s2">&quot;&quot;</span>
+        <span class="p">)</span>
+        <span class="n">obj</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">tiow</span><span class="p">)</span>
+        <span class="n">tiow</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">obj</span>
+
+    <span class="k">def</span> <span class="nf">_create_message</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">content_bytes</span><span class="p">,</span> <span class="n">content_type</span><span class="p">,</span> <span class="n">content_encoding</span>
+    <span class="p">):</span>
+        <span class="n">jsonheader</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;byteorder&quot;</span><span class="p">:</span> <span class="n">sys</span><span class="o">.</span><span class="n">byteorder</span><span class="p">,</span>
+            <span class="s2">&quot;content-type&quot;</span><span class="p">:</span> <span class="n">content_type</span><span class="p">,</span>
+            <span class="s2">&quot;content-encoding&quot;</span><span class="p">:</span> <span class="n">content_encoding</span><span class="p">,</span>
+            <span class="s2">&quot;content-length&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">content_bytes</span><span class="p">),</span>
+        <span class="p">}</span>
+        <span class="n">jsonheader_bytes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_json_encode</span><span class="p">(</span><span class="n">jsonheader</span><span class="p">,</span> <span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+        <span class="n">message_hdr</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="s2">&quot;&gt;H&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">jsonheader_bytes</span><span class="p">))</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="n">message_hdr</span> <span class="o">+</span> <span class="n">jsonheader_bytes</span> <span class="o">+</span> <span class="n">content_bytes</span>
+        <span class="k">return</span> <span class="n">message</span>
+
+    <span class="k">def</span> <span class="nf">_create_response_json_content</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_request_handler</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="p">)</span>
+        <span class="n">content_encoding</span> <span class="o">=</span> <span class="s2">&quot;utf-8&quot;</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;content_bytes&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_json_encode</span><span class="p">(</span><span class="n">content</span><span class="p">,</span> <span class="n">content_encoding</span><span class="p">),</span>
+            <span class="s2">&quot;content_type&quot;</span><span class="p">:</span> <span class="s2">&quot;text/json&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;content_encoding&quot;</span><span class="p">:</span> <span class="n">content_encoding</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">response</span>
+
+    <span class="k">def</span> <span class="nf">_create_response_binary_content</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;content_bytes&quot;</span><span class="p">:</span> <span class="sa">b</span><span class="s2">&quot;First 10 bytes of request: &quot;</span>
+            <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="p">[:</span><span class="mi">10</span><span class="p">],</span>
+            <span class="s2">&quot;content_type&quot;</span><span class="p">:</span> <span class="s2">&quot;binary/custom-server-binary-type&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;content_encoding&quot;</span><span class="p">:</span> <span class="s2">&quot;binary&quot;</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">response</span>
+
+<div class="viewcode-block" id="Message.process_events"><a class="viewcode-back" href="../libserver.html#libserver.Message.process_events">[docs]</a>    <span class="k">def</span> <span class="nf">process_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">mask</span> <span class="o">&amp;</span> <span class="n">selectors</span><span class="o">.</span><span class="n">EVENT_READ</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">mask</span> <span class="o">&amp;</span> <span class="n">selectors</span><span class="o">.</span><span class="n">EVENT_WRITE</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">write</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Message.read"><a class="viewcode-back" href="../libserver.html#libserver.Message.read">[docs]</a>    <span class="k">def</span> <span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_read</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_jsonheader_len</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">process_protoheader</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_jsonheader_len</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">jsonheader</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">process_jsonheader</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">jsonheader</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">process_request</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Message.write"><a class="viewcode-back" href="../libserver.html#libserver.Message.write">[docs]</a>    <span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">response_created</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">create_response</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_write</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Message.close"><a class="viewcode-back" href="../libserver.html#libserver.Message.close">[docs]</a>    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;closing connection to&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">addr</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">selector</span><span class="o">.</span><span class="n">unregister</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sock</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="s2">&quot;error: selector.unregister() exception for&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">addr</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">repr</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sock</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="s2">&quot;error: socket.close() exception for&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">addr</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">repr</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="c1"># Delete reference to socket object for garbage collection</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sock</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="Message.process_protoheader"><a class="viewcode-back" href="../libserver.html#libserver.Message.process_protoheader">[docs]</a>    <span class="k">def</span> <span class="nf">process_protoheader</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">hdrlen</span> <span class="o">=</span> <span class="mi">2</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">hdrlen</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_jsonheader_len</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack</span><span class="p">(</span>
+                <span class="s2">&quot;&gt;H&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span><span class="p">[:</span><span class="n">hdrlen</span><span class="p">]</span>
+            <span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span><span class="p">[</span><span class="n">hdrlen</span><span class="p">:]</span></div>
+
+<div class="viewcode-block" id="Message.process_jsonheader"><a class="viewcode-back" href="../libserver.html#libserver.Message.process_jsonheader">[docs]</a>    <span class="k">def</span> <span class="nf">process_jsonheader</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">hdrlen</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_jsonheader_len</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">hdrlen</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">jsonheader</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_json_decode</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span><span class="p">[:</span><span class="n">hdrlen</span><span class="p">],</span> <span class="s2">&quot;utf-8&quot;</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span><span class="p">[</span><span class="n">hdrlen</span><span class="p">:]</span>
+            <span class="k">for</span> <span class="n">reqhdr</span> <span class="ow">in</span> <span class="p">(</span>
+                <span class="s2">&quot;byteorder&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;content-length&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;content-type&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;content-encoding&quot;</span><span class="p">,</span>
+            <span class="p">):</span>
+                <span class="k">if</span> <span class="n">reqhdr</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">jsonheader</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Missing required header &quot;</span><span class="si">{</span><span class="n">reqhdr</span><span class="si">}</span><span class="s1">&quot;.&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Message.process_request"><a class="viewcode-back" href="../libserver.html#libserver.Message.process_request">[docs]</a>    <span class="k">def</span> <span class="nf">process_request</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">content_len</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jsonheader</span><span class="p">[</span><span class="s2">&quot;content-length&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">content_len</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span><span class="p">[:</span><span class="n">content_len</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recv_buffer</span><span class="p">[</span><span class="n">content_len</span><span class="p">:]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">jsonheader</span><span class="p">[</span><span class="s2">&quot;content-type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;text/json&quot;</span><span class="p">:</span>
+            <span class="n">encoding</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">jsonheader</span><span class="p">[</span><span class="s2">&quot;content-encoding&quot;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">request</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_json_decode</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">encoding</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;received request&quot;</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="p">),</span> <span class="s2">&quot;from&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">addr</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Binary or unknown content-type</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">request</span> <span class="o">=</span> <span class="n">data</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s1">&#39;received </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">jsonheader</span><span class="p">[</span><span class="s2">&quot;content-type&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1"> request from&#39;</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">addr</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="c1"># Set selector to listen for write events, we&#39;re done reading.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_set_selector_events_mask</span><span class="p">(</span><span class="s2">&quot;w&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Message.create_response"><a class="viewcode-back" href="../libserver.html#libserver.Message.create_response">[docs]</a>    <span class="k">def</span> <span class="nf">create_response</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">jsonheader</span><span class="p">[</span><span class="s2">&quot;content-type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;text/json&quot;</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_response_json_content</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Binary or unknown content-type</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_response_binary_content</span><span class="p">()</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_message</span><span class="p">(</span><span class="o">**</span><span class="n">response</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">response_created</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_buffer</span> <span class="o">+=</span> <span class="n">message</span></div></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">socketserver</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2020, Brent.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.1.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
