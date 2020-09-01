@@ -91,7 +91,6 @@ class SocketClient(object):
         encoding (optional - str): Encoding to use for request content.
         """
         request = self._create_request(request, encoding)
-#        self.message.request = request
         self._sel.modify(self._sock, selectors.EVENT_WRITE, data=self.message)
         try:
             events = self._sel.select(timeout=5)
@@ -107,7 +106,6 @@ class SocketClient(object):
                     self.close()
         except KeyboardInterrupt:
             print("caught keyboard interrupt, exiting")
-
 
     def read_response(self):
         """Read the response from the socket.
@@ -127,7 +125,6 @@ class SocketClient(object):
                     self.close()
         except KeyboardInterrupt:
             print("caught keyboard interrupt, exiting")
-
 
     def close(self):
         """Close the selector and socket."""

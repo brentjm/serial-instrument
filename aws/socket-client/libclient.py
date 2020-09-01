@@ -24,13 +24,10 @@ class Message:
     https://realpython.com/python-sockets/
     """
     def __init__(self, selector, sock, addr, response_handler):
-        self.selector = selector
         self.sock = sock
         self.addr = addr
-        self.request = None
         self._recv_buffer = b""
         self._send_buffer = b""
-        self._request_queued = False
         self._jsonheader_len = None
         self.jsonheader = None
         self.content = None
@@ -63,9 +60,14 @@ class Message:
         message = message_hdr + jsonheader_bytes + request["content"]
         return message
 
-    def _write(self):
-        """Write the send buffer (self._send_buffer) to the socket.
+    def _write(self, message):
+        """Write the send buffer (self._send_buffer) to the socket. The method
+        loops writing data to the socket until all of the bytes have been written.
+
+        Arguments
+        message (bytes): Message formatted in bytes
         """
+        self._send_buffer = message
         print("sending", repr(self._send_buffer), "to", self.addr)
         # Loop until the entire send buffer is empty.
         while self._send_buffer:
@@ -177,8 +179,7 @@ class Message:
         request (bytes): The request/message to write to the socket.
         """
         message = self._create_message(request)
-        self._send_buffer = message
-        self._write()
+        self._write(message)
 
     def read(self):
         """Read the message and then call the response handler on the message
