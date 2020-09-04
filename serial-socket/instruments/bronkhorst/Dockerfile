@@ -5,9 +5,10 @@ RUN useradd --create-home --home /home/bronkhorst --shell /bin/bash --uid 1000 -
     && sed -i -e /dialout/s/$/bronkhorst/ /etc/group
 
 USER bronkhorst
-RUN mkdir /home/bronkhorst/socket
-COPY --chown=bronkhorst:bronkhorst socket_server.py libserver.py serial_instrument.py bronkhorst.py logger_conf.yml /home/bronkhorst/socket/
-WORKDIR /home/bronkhorst/socket
+RUN mkdir /home/bronkhorst/python
+COPY --chown=bronkhorst:bronkhorst ./serial-socket/socket/ /home/bronkhorst/python
+COPY --chown=bronkhorst:bronkhorst ./serial-socket/instruments/bronkhorst/bronkhorst.py /home/bronkhorst/python/
+WORKDIR /home/bronkhorst/python
 
 #CMD ["/bin/bash", "-c", "sleep 1000000000"]
 CMD ["python", "bronkhorst.py"]

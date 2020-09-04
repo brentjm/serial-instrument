@@ -3,7 +3,7 @@
 
 import logging
 import propar
-from serial_instrument import SerialInstrument
+from instruments.instrument import SerialInstrument
 from pdb import set_trace
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,8 @@ class Bronkhorst(SerialInstrument):
 
 
 def test():
-    bronkhorst = Bronkhorst("/dev/ttyUSB0", "172.19.0.2", 5007)
+    #bronkhorst = Bronkhorst("/dev/ttyUSB0", "172.19.5.2", 5007)
+    bronkhorst = Bronkhorst("/dev/ttyUSB0", "127.0.0.1", 5007)
     request = {"user": "unique_user", "password": "123"}
 
     print("test login")

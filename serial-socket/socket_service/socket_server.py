@@ -15,7 +15,7 @@ import selectors
 import traceback
 import argparse
 
-import libserver
+from socket_service import libserver
 from pdb import set_trace
 
 class SocketServer(object):
