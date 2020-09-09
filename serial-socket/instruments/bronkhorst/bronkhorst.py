@@ -4,7 +4,6 @@
 import logging
 import propar
 from instruments.instrument import SerialInstrument
-from pdb import set_trace
 logger = logging.getLogger(__name__)
 
 """
@@ -46,10 +45,8 @@ class Bronkhorst(SerialInstrument):
         """Update the Bronkhorst flow rate present value.
         https://pypi.org/project/bronkhorst-propar/
         """
-        data = {}
         for attribute in ["flow_rate"]:
-            data[attribute] = self._instrument.measure
-        return data
+            self._data[attribute] = self._instrument.measure
 
     def _wink(self):
         """Causes the leds on the side to flash.
@@ -91,4 +88,6 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
+    #bronkhorst = Bronkhorst("/dev/ttyUSB0", "172.19.5.2", 5007)
+    bronkhorst = Bronkhorst("/dev/ttyUSB0", "127.0.0.1", 5007)
+    bronkhorst.run()

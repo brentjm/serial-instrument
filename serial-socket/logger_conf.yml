@@ -10,7 +10,7 @@ formatters:
 handlers:
     console:
         class: logging.StreamHandler
-        level: ERROR
+        level: INFO
         formatter: standard
         stream: ext://sys.stdout
 
@@ -29,7 +29,7 @@ root:
     propogate: yes
 
 loggers:
-    logger:
-        level: INFO
+    mylogger:
+        level: DEBUG
         handlers: [console, info_file_handler]
         propogate: no

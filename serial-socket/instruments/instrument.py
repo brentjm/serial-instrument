@@ -3,8 +3,10 @@
 """
 Module to provide abstract base class for creating a serial instrument.
 """
+import threading
 import socket
 import argparse
+import selectors
 import logging
 import logging.config
 import json
@@ -12,51 +14,67 @@ import yaml
 import coloredlogs
 from time import sleep
 from pdb import set_trace
-from socket_service.socket_server import SocketServer
+#from socket_service.socket_server import ThreadedTCPServer, ThreadedTCPRequestHandler
 logger = logging.getLogger(__name__)
 
 __author__ = "Brent Maranzano"
 __license__ = "MIT"
 
 
+sel = selectors.DefaultSelector()
+
 class SerialInstrument(object):
-    """Base class to abstract serial instruments. The SerialInstrument object
-    connects to a locally connected serial instrument and starts a socket
-    server that accepts multiple connections. SerialInstrument requires a
-    username andd password in incoming messages, which assures only a valid
-    user can execute commands. Validated message commands are sent to the
-    instrument for execution.
-    "_connect_instrument" method must be overloaded for each instrument type.
-    "_execture_command" attempts to execute attributes from inheritting class.
+    """Base class to abstract serial instruments. The class contains a socket
+    server that services valid message commands by calling the appropriate
+    instrument commands on the attached serial port. Valid commands have the
+    form of:
+        {
+            "user": user_name,
+            "password": password,
+            "command":
+            {
+                "command_name", command_name,
+                "parameters": parameters"
+            }
+        }
+    The class provides a data buffer to provide rapid response of instrument
+    values without over-burdening the serial port.
+
+    The following methods are expected to be over-ridden with instrument
+    specific calls:
+    _connect_instrument - defines the instrument connection to the serial port
+    _update_data - instrument specific commands to update the instrument values
     """
     def __init__(self, instrument_port, socket_ip, socket_port):
         """Start the logger, connect to the instrument (serial), start listening
         on a socket, and initialize the instrument data to None.
         """
+        logger.info("initiating instrument base class")
         self._setup_logger()
         self._user = None
         self._password = None
         self._data = {}
         self._instrument = self._connect_instrument(instrument_port)
-        self._socket = SocketServer(socket_ip, socket_port, self.process_request)
-        self._data = self._update_data()
+        self._create_socket(HOST=socket_ip, PORT=socket_port)
         logger.info("Instrument initiated")
 
     def _setup_logger(self, config_file="./logger_conf.yml"):
         """Start the logger using the provided configuration file.
         """
-        try:
-            with open(config_file, 'rt') as file_obj:
-                config = yaml.safe_load(file_obj.read())
-                logging.config.dictConfig(config)
-                coloredlogs.install()
-        except Exception as e:
-            print(e)
-            logging.basicConfig(level="default_level")
-            coloredlogs.install(level="default_level")
+#        try:
+#            with open(config_file, 'rt') as file_obj:
+#                config = yaml.safe_load(file_obj.read())
+#                logging.config.dictConfig(config)
+#                coloredlogs.install()
+#        except Exception as e:
+#            print(e)
+        logging.basicConfig(level=logging.DEBUG)
+        coloredlogs.install(level=logging.DEBUG)
 
-    def _connect_socket(self, ip="127.0.0.1", port=5007):
-        """Create a local socket server.
+    def _create_socket(self, HOST="127.0.0.1", PORT=5007):
+        """Create a local socket server, register it with selector that will
+        call self._accept connection upon READ events (i.e. client
+        connections).
 
         Arguments:
         ip (string): IP address of host.
@@ -64,14 +82,27 @@ class SerialInstrument(object):
 
         Returns a socket connection.
         """
-        number_connections = 5
-        host_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        host_socket.bind((ip, port))
-        host_socket.listen(number_connections)
-        print("listen on {}:{}".format(ip, port))
-        conn, addr = host_socket.accept()
-        print("connected {}".format(addr))
-        return conn
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind((HOST, PORT))
+        sock.listen(1)
+        sock.setblocking(False)
+        sel.register(sock, selectors.EVENT_READ, self._accept_connection)
+        logger.info("Socket server listening on")
+
+    def _accept_connection(self, sock, mask):
+        """This method is called by the selector when a client attempts
+        to establish a connection. The  method accepts the connection,
+        registers the connection with selector that will call self._handle_connection
+        upon READ events (i.e. client attempts to send data).
+
+        Arguments:
+        sock (socket): Socket that is listening for instrument commands.
+        mask (1 | 2): The READ (1) or WRITE (2) event mask.
+        """
+        conn, addr = sock.accept()  # Should be ready
+        print('accepted', conn, 'from', addr)
+        conn.setblocking(False)
+        sel.register(conn, selectors.EVENT_READ, self._handle_connection_event)
 
     def _connect_instrument(self, port):
         """Connect to the instrument serial port. This method should be
@@ -83,48 +114,40 @@ class SerialInstrument(object):
         pass
 
     def _parse_request(self, request):
-        """Parse the request to get the command name and parameters.
+        """Parse the request to get the command name and parameters. If
+        the parse fails set request to False and return.
 
         Arguments:
-        request (dict): valid request form is:
-        {
-            "user": user_name,
-            "password": password,
-            "command":
-            {
-                "command_name", command_name,
-                "parameters": parameters"
-            }
-        }
+        request (dict): Instrument request
 
-        Returns a response dictionary:
-            for errors - {"status": "error", "description": ...}
-            for correct - {"status": "ok", "description": ...}
+        Returns a dictionary if parsed, else returns False.
         """
+        set_trace()
         if ("user" not in request or "password" not in request
            or "command" not in request):
             logger.error("invalid request", extra=request)
-            response = {
+            self._response = str({
                 "status": "error",
                 "descripton": "invalid request format"
-            }
+            })
+            request = False
         elif "command_name" not in request["command"]:
-            response = {
+            self._response = str({
                 "status": "error",
                 "descripton": "invalid request format"
-            }
+            })
+            request = False
         else:
             command_name = request["command"]["command_name"]
             if "parameters" in request["command"]:
                 parameters = request["command"]["parameters"]
             else:
                 parameters = None
-            response = {
-                "status": "ok",
-                "value": {"command_name": command_name,
-                          "parameters": parameters}
+            request = {
+                "command_name": command_name,
+                "parameters": parameters
             }
-        return response
+        return request
 
     def _validate_credentials(self, request):
         """Confirm that the request contains the logged in usernme with
@@ -138,22 +161,20 @@ class SerialInstrument(object):
             for errors - {"status": "error", "description": ...}
             for correct - {"status": "ok", "description": ...}
         """
+        valid = None
         if (self._user is None and self._password is None):
-            response = {
-                "status": "ok"
-            }
+            valid = True
         elif (request["user"] == self._user
               and request["password"] == self._password):
-            response = {
-                "status": "ok"
-            }
+            valid = True
         else:
-            response = {
-                "status": "error",
-                "value": "invalid username or password"
-            }
             logger.error("invalid credentials", extra=request)
-        return response
+            valid = False
+            self._response = str({
+                "status": "error",
+                "description": "invalid user name or password"
+            })
+        return valid
 
     def _login(self, user_name, password):
         """Set the class attributes _user and _password with
@@ -162,28 +183,54 @@ class SerialInstrument(object):
         Arguments:
         user_name (str): Username for currently logged in user.
         password (str): Password of currently logged in user.
-
-        Returns a response dictionary:
-            for errors - {"status": "error", "description": ...}
-            for correct - {"status": "ok", "description": ...}
         """
         self._user = user_name
         self._password = password
         logger.info("logged in user {}".format(self._user))
-        return {"status": "ok", "description": "logged in user"}
+        self._response = str({
+            "status": "ok",
+            "description": "logged in user {}".format(self._user)
+        })
 
     def _logout(self):
         """Set the class attributes _user and _password to None to
         "logout" the user.
-
-        Returns a response dictionary:
-            for errors - {"status": "error", "description": ...}
-            for correct - {"status": "ok", "description": ...}
         """
         self._user = None
         self._password = None
         logger.info("logged out user {}".format(self._user))
-        return {"status": "ok", "description": "logged out user"}
+        self._response = str({
+            "status": "ok",
+            "description": "logged out user {}".format(self._user)
+        })
+
+    def _get_data(self, parameters=None):
+        """Get the instrument data. If parameters are provided, respond
+        with the desired parameters, else respond with all the data.
+
+        Arguments:
+        parameteters (str|list): Key or keys for the data dictionary to return
+
+        Returns a dictionary of the instruement data {parameter: parameter_value}
+        """
+        if parameters is None:
+            self._response = str({
+                "status": "ok",
+                "value": self._data
+            })
+        else:
+            if type(parameters) is str:
+                parameters = [parameters]
+            try:
+                self._response = ({
+                    "stauts": "ok",
+                    "value": {k: self._data[parameters[k]] for k in parameters}
+                })
+            except KeyError:
+                self._response = ({
+                    "status": "error",
+                    "value": "invalid data key(s): {}".format(parameters)
+                })
 
     def _update_data(self):
         """Update the class data from the instruments values. This is the method
@@ -193,35 +240,6 @@ class SerialInstrument(object):
         """
         pass
 
-    def _get_data(self, parameters=None):
-        """Get the instrument data. If parameters are provided, respond
-        with the desired parameters, else respond with all the data.
-        TODO: This currently does not work, as the update data must be wrote.
-
-        parameteters (str|list): Key or keys for the data dictionary to return
-
-        Returns a dictionary of the instruement data {parameter: parameter_value}
-        """
-        if parameters is None:
-            response = {
-                "status": "ok",
-                "value": self._data
-            }
-        else:
-            if type(parameters) is str:
-                parameters = [parameters]
-            try:
-                response = {
-                    "stauts": "ok",
-                    "value": {k: self._data[parameters[k]] for k in parameters}
-                }
-            except KeyError:
-                response = {
-                    "status": "error",
-                    "value": "invalid data key(s): {}".format(parameters)
-                }
-        return response
-
     def _execute_command(self, command_name, parameters):
         """Attempt to execute the requested command.
         TODO: put delay
@@ -229,134 +247,160 @@ class SerialInstrument(object):
         Arguments:
         command_name (str): Name of method to execute.
         parameters (dict|None): Dictionary of parameters for command.
-
-        Returns a response dictionary:
-            for errors - {"status": "error", "description": ...}
-            for correct - {"status": "okay", "description": ...}
         """
-        error = "none"
+        error = None
 
         # Check and execute if the command is in the base class 
         # (e.g. login, logout, ...)
         if hasattr(self, command_name):
             if parameters is None:
                 try:
-                    response = getattr(self, command_name)()
+                    self._response = getattr(self, command_name)()
                 except:
-                    error = "execution"
+                    error = "command"
             else:
                 try:
-                    response = getattr(self, command_name)(**parameters)
+                    self._response = getattr(self, command_name)(**parameters)
                 except:
-                    error = "execution"
-        # Check and execute if the command is in the inhereting class 
-        # (e.g. login, logout, ...)
+                    error = "command"
+
+        # Check and execute if the command is in the inhereting class
+        # (e.g. measure, set_point, ...)
         elif hasattr(self._instrument, command_name):
             if parameters is None:
                 try:
-                    response = getattr(self._instrument, command_name)()
+                    self._response = getattr(self._instrument, command_name)()
                 except:
-                    error = "execution"
+                    error = "command"
             else:
                 try:
-                    response = getattr(self._instrument,
+                    self._response = getattr(self._instrument,
                                        command_name)(**parameters)
                 except:
-                    error = "execution"
+                    error = "command"
         else:
-            error = "attribute"
+            self._response = str({
+                "status": "error",
+                "descripton": "command '{}' not valid".format(command_name)
+            })
 
-        # Log a formatted message and return a response based on the 
+        # Log a formatted message and return a response based on the
         # results of executing the command
         if error == "none":
             logger.info(
                 "executed request command",
                 extra={"command_name": command_name, "parameters": parameters}
             )
-            response = {
-                "status": "ok",
-                "value": "succesfully executed: {}".format(command_name)
-            }
-        elif error == "execution":
+        elif error == "command":
             logger.error(
                 "error occurred when executing request command",
                 extra={"command_name": command_name, "parameters": parameters}
             )
-            response = {
+            self._response = {
                 "status": "error",
                 "value": "error executing: {}".format(command_name)
             }
-        elif error == "attribute":
-            logger.error(
-                "request invalid command",
-                extra={"command_name": command_name, "parameters": parameters}
-            )
-            response = {"status": "error", "value": "invalid request"}
 
-        return response
+    def _load_json(self, message):
+        """Try to interpret the message as JSON.
 
-    def process_request(self, request):
-        """Parse the request, validate the credentials sent with the request,
-        and execute the command.
-            valid command names:
-                login
-                logout
-                get_data
-                <any other subclass methods>
+        Arguments
+        message (str): string to try to interpret as JSON.
+
+        Returns dictionary if JSON successfully parsed, else return False.
+        """
+        set_trace()
+        try:
+            request = json.loads(message)
+        except json.decoder.JSONDecodeError:
+            logger.error("request type not valid JSON", extra=message)
+            self._response = str({
+                "status": "error",
+                "description": "request type not valid JSON"
+            })
+            return False
+
+    def _process_message(self, message):
+        """Process the message, and set the self._response attribute.
 
         Arguments:
-        request (JSON): Request should be of form:
-            {
-                "user": user_name,
-                "password": password,
-                "command":
-                {
-                    "command_name", command_name,
-                    "parameters": parameters"
-                }
-            }
-
-        Returns command response. Response is dictionary:
-        {
-            "status": "ok"|"error"
-            "description": error description or values
-        }
+        message (JSON): See class description for valid format.
         """
-        if type(request) is str:
-            try:
-                request = json.loads(request)
-            except:
-                logger.error("request type not valid JSON", extra=request)
-                return {"status": "error", "description": "request type not valid JSON"}
-        elif type(request) is not dict:
-            logger.error("invalid request type", extra=request)
-            return {"status": "error", "description": "invalid request type"}
+        # Try to create dict from message (valid JSON).
+        request = self._load_json(message)
+        if not request:
+            return
 
-        # Return error response if the message isn't formatted properly.
-        response = self._parse_request(request)
-        if response["status"] == "error":
-            return response
-        # Extract command and command parameters from the message.
-        else:
-            command_name = response["value"]["command_name"]
-            parameters = response["value"]["parameters"]
+        # Parse the request.
+        request = self._parse_request(request)
+        if not request:
+            return
 
         # Return error response if invalid credentials
-        response = self._validate_credentials(request)
-        if response["status"] == "error":
-            return response
+        if not self._validate_credentials(request):
+            return
 
         # Execute the message command.
-        if command_name == "login":
-            response = self._login(request["user"], request["password"])
-        elif command_name == "logout":
-            response = self._logout()
-        elif command_name == "get_data":
-            response = self._get_data(parameters)
+        if request["command_name"] == "login":
+            self._login(request["user"], request["password"])
+        elif request["command_name"] == "logout":
+            self._logout()
+        elif request["command_name"] == "get_data":
+            self._get_data(request["parameters"])
         else:
-            response = self._execute_command(command_name, parameters)
+            self._execute_command(
+                request["command_name"],
+                request["parameters"]
+            )
 
-        return response
+    def _process_write_event(self, conn):
+        """Send the self_response back to the client and set the selector to
+        READ. If it fails, do nothing.
+        """
+        try:
+            conn.sendall(bytes(self._response, 'ascii'))
+        except:
+            pass
+        finally:
+            sel.modify(conn, selectors.EVENT_READ, self._handle_connection_event)
+
+    def _process_read_event(self, conn):
+        """If message is not null, decode and process the message and set the 
+        selector to WRITE. If message is null, close the connection.
+
+        Arguments:
+        conn (socket connection): A socket connection to a client.
+        """
+        message = conn.recv(4096)
+        message = message.decode('utf-8')
+        if message:
+            self._process_message(message)
+            sel.modify(conn, selectors.EVENT_WRITE, self._handle_connection_event)
+        else:
+            sel.unregister(conn)
+            conn.close()
+
+    def _handle_connection_event(self, conn, mask):
+        """If the event is READ send to _process_read_event and check the return
+        value. If the return value is False, then close the connection; else
+        set the selector to write state.
+        """
+        if mask == selectors.EVENT_READ:
+            logger.info("incoming message from {}".format(conn))
+            self._process_read_event(conn)
+        elif mask == selectors.EVENT_WRITE:
+            logger.info("writing message to {}".format(conn))
+            self._process_write_event(conn)
+
+    def run(self):
+        """Start the update thread and the socket server thread.
+        """
+        logger.info("Instrument service run started.")
+        while True:
+            events = sel.select()
+            for key, mask in events:
+                callback = key.data
+                callback(key.fileobj, mask)
 
 
 if __name__ == "__main__":
@@ -381,3 +425,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     instrument_server = SerialInstrument(args.instrument_port, args.socket_ip, args.socket_port)
+    instrument_server.run()
