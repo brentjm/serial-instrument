@@ -5,6 +5,7 @@ import logging
 import propar
 from instruments.instrument import SerialInstrument
 logger = logging.getLogger(__name__)
+from pdb import set_trace
 
 """
 Contains the Bronkhorst class that is a subclass of the
@@ -52,6 +53,8 @@ class Bronkhorst(SerialInstrument):
         """Causes the leds on the side to flash.
         """
         self._instrument.wink()
+        response = {"status": "ok", "description": "successful wink"}
+        return response
 
 
 def test():

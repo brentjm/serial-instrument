@@ -1,6 +1,8 @@
 import socket
 import threading
 from time import sleep
+from pdb import set_trace
+import json
 
 
 def client(ip, port, message):
@@ -16,12 +18,12 @@ def client(ip, port, message):
 if __name__ == "__main__":
     ip = "127.0.0.1"
     port = 5007
-    client(ip, port, str({
+    message = json.dumps({
         "user": "brent",
         "password": "pass",
-        "command": {"command_name": "wink"}
-    }))
-    #client(ip, port, "wink")
+        "command": {"command_name": "_wink"}
+    })
+    client(ip, port, message)
 
 #    for client_number in range(1):
 #        x = threading.Thread(target=client, args=(ip, port, "hello client {}".format(client_number)))
