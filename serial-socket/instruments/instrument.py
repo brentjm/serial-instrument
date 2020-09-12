@@ -4,6 +4,7 @@
 Module to provide abstract base class for creating a serial instrument.
 """
 import threading
+import queue
 import socket
 import argparse
 import selectors
@@ -56,6 +57,7 @@ class SerialInstrument(object):
         self._data = {}
         self._instrument = self._connect_instrument(instrument_port)
         self._create_socket(HOST=socket_ip, PORT=socket_port)
+        self._queue = queue.SimpleQueue()
         self._response = None
         logger.info("Instrument initiated")
 
@@ -284,6 +286,63 @@ class SerialInstrument(object):
                 "status": "error",
                 "descripton": "command '{}' not found".format(command_name)
             }
+
+    def _que_command(self, command_name, parameters):
+        """Que the command
+
+        Arguments:
+        command_name (str): Name of method to execute.
+        parameters (dict|None): Dictionary of parameters for command.
+        """
+        # Response to use if the command fails when executed
+        error_response = {
+            "status": "error",
+            "description": "Error executing command {}".format(command_name)
+        }
+        # Check and execute if the command is in
+        # the base class (e.g. login, logout, ...)
+        if hasattr(self, command_name):
+            if parameters is None:
+                try:
+                    self._response = getattr(self, command_name)()
+                except Exception:
+                    self._response = error_response
+            else:
+                try:
+                    self._response = getattr(self, command_name)(**parameters)
+                except Exception:
+                    self._response = error_response
+
+        # Check and execute if the command is in the inhereting class
+        # (e.g. measure, set_point, ...)
+        elif hasattr(self._instrument, command_name):
+            if parameters is None:
+                try:
+                    self._response = getattr(self._instrument, command_name)()
+                except Exception:
+                    self._response = error_response
+            else:
+                try:
+                    self._response = getattr(self._instrument,
+                                       command_name)(**parameters)
+                except Exception:
+                    self._response = error_response
+        else:
+            # If no command was found set response and return.
+            self._response = {
+                "status": "error",
+                "descripton": "command '{}' not found".format(command_name)
+            }
+
+    def _execute_que(self, command_name, parameters):
+        """Execute commands in the que at a timing intervals sufficiently
+        slow to avoid serial errors.
+
+        Arguments
+        command_name (str): A method name in self._instrument
+        parameters (dict): Auxilary paramters needed for executing the command
+        """
+        pass
 
     def _load_json(self, message):
         """Try to interpret the message as JSON.
