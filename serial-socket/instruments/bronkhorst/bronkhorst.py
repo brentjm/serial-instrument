@@ -43,7 +43,7 @@ class Bronkhorst(SerialInstrument):
         return connection
 
     def _update_data(self):
-        """Update the Bronkhorst flow rate present value.
+        """Update the value of the current measured flow rate.
         https://pypi.org/project/bronkhorst-propar/
         """
         for attribute in ["flow_rate"]:

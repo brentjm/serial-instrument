@@ -44,7 +44,7 @@ class SerialInstrument(object):
     The following methods are expected to be over-ridden with instrument
     specific calls:
     _connect_instrument - defines the instrument connection to the serial port
-    _update_data - instrument specific commands to update the instrument values
+    _set_update_commands - instrument specific commands to update the instrument values
     """
     def __init__(self, instrument_port, socket_ip, socket_port):
         """Start the logger, connect to the instrument (serial), start listening
@@ -56,9 +56,12 @@ class SerialInstrument(object):
         self._password = None
         self._data = {}
         self._instrument = self._connect_instrument(instrument_port)
-        self._create_socket(HOST=socket_ip, PORT=socket_port)
-        self._queue = queue.SimpleQueue()
+        self._queue = queue.Queue()
         self._response = None
+        self._thread_lock = threading.Lock()
+        self._update_thread = threading.Thread(target=self._call_updates, daemon=True)
+        self._execute_thread = threading.Thread(target=self._execute_que, daemon=True)
+        self._create_socket(HOST=socket_ip, PORT=socket_port)
         logger.info("Instrument initiated")
 
     def _setup_logger(self, config_file="./logger_conf.yml"):
@@ -118,12 +121,15 @@ class SerialInstrument(object):
 
     def _parse_request(self, request):
         """Parse the request to get the command name and parameters. If
-        the parse fails set request to False and return.
+        the parse fails set request to None. Set the self._response attribute
+        according to parse results.
 
         Arguments:
         request (dict): Instrument request
 
-        Returns a dictionary if parsed, else returns False.
+        Returns a dictionary if parsed:
+            {"command_name": command_name, "parameters": parameters},
+            else returns None.
         """
         if ("user" not in request or "password" not in request
            or "command" not in request):
@@ -153,10 +159,11 @@ class SerialInstrument(object):
 
     def _validate_credentials(self, request):
         """Confirm that the request contains the logged in usernme with
-        correct password.
+        correct password. Set the self._response attribute according the
+        the success or fail of the validation.
 
         Arguments
-        request (dict): Request command and credentials. See _parse_request
+        request (dict): Request command and credentials. See class description
         for valid request format.
 
         Returns boolean True - validated  False - invalid
@@ -176,8 +183,8 @@ class SerialInstrument(object):
         return valid
 
     def _login(self, user_name, password):
-        """Set the class attributes _user and _password with
-        the passed arguments, to "login" the user.
+        """Set the class attributes _user and _password with the passed
+        arguments, to "login" the user. Set the self._response attribute.
 
         Arguments:
         user_name (str): Username for currently logged in user.
@@ -193,7 +200,7 @@ class SerialInstrument(object):
 
     def _logout(self):
         """Set the class attributes _user and _password to None to
-        "logout" the user.
+        "logout" the user. Set the self._response attribute.
         """
         self._user = None
         self._password = None
@@ -205,7 +212,8 @@ class SerialInstrument(object):
 
     def _get_data(self, parameters=None):
         """Get the instrument data. If parameters are provided, respond
-        with the desired parameters, else respond with all the data.
+        with the desired parameters, else respond with all the data. Set the
+        self._response attribute.
 
         Arguments:
         parameteters (str|list): Key or keys for the data dictionary to return
@@ -231,118 +239,93 @@ class SerialInstrument(object):
                     "value": "invalid data key(s): {}".format(parameters)
                 }
 
-    def _update_data(self):
-        """Update the class data from the instruments values. This is the method
-        that must be overloaded for each instrument.
-        TODO: The socket server runs in a continuous loop listenting. Thus, for
-        this method to work, would have to run in separate thread.
-        """
-        pass
-
-    def _execute_command(self, command_name, parameters):
-        """Attempt to execute the requested command.
-        TODO: put delay
-
-        Arguments:
-        command_name (str): Name of method to execute.
-        parameters (dict|None): Dictionary of parameters for command.
-        """
-        # Response to use if the command fails when executed
-        error_response = {
-            "status": "error",
-            "description": "Error executing command {}".format(command_name)
-        }
-        # Check and execute if the command is in
-        # the base class (e.g. login, logout, ...)
-        if hasattr(self, command_name):
-            if parameters is None:
-                try:
-                    self._response = getattr(self, command_name)()
-                except Exception:
-                    self._response = error_response
-            else:
-                try:
-                    self._response = getattr(self, command_name)(**parameters)
-                except Exception:
-                    self._response = error_response
-
-        # Check and execute if the command is in the inhereting class
-        # (e.g. measure, set_point, ...)
-        elif hasattr(self._instrument, command_name):
-            if parameters is None:
-                try:
-                    self._response = getattr(self._instrument, command_name)()
-                except Exception:
-                    self._response = error_response
-            else:
-                try:
-                    self._response = getattr(self._instrument,
-                                       command_name)(**parameters)
-                except Exception:
-                    self._response = error_response
-        else:
-            # If no command was found set response and return.
-            self._response = {
-                "status": "error",
-                "descripton": "command '{}' not found".format(command_name)
-            }
-
-    def _que_command(self, command_name, parameters):
-        """Que the command
-
-        Arguments:
-        command_name (str): Name of method to execute.
-        parameters (dict|None): Dictionary of parameters for command.
-        """
-        # Response to use if the command fails when executed
-        error_response = {
-            "status": "error",
-            "description": "Error executing command {}".format(command_name)
-        }
-        # Check and execute if the command is in
-        # the base class (e.g. login, logout, ...)
-        if hasattr(self, command_name):
-            if parameters is None:
-                try:
-                    self._response = getattr(self, command_name)()
-                except Exception:
-                    self._response = error_response
-            else:
-                try:
-                    self._response = getattr(self, command_name)(**parameters)
-                except Exception:
-                    self._response = error_response
-
-        # Check and execute if the command is in the inhereting class
-        # (e.g. measure, set_point, ...)
-        elif hasattr(self._instrument, command_name):
-            if parameters is None:
-                try:
-                    self._response = getattr(self._instrument, command_name)()
-                except Exception:
-                    self._response = error_response
-            else:
-                try:
-                    self._response = getattr(self._instrument,
-                                       command_name)(**parameters)
-                except Exception:
-                    self._response = error_response
-        else:
-            # If no command was found set response and return.
-            self._response = {
-                "status": "error",
-                "descripton": "command '{}' not found".format(command_name)
-            }
-
-    def _execute_que(self, command_name, parameters):
-        """Execute commands in the que at a timing intervals sufficiently
-        slow to avoid serial errors.
+    def _call_updates(self, interval=10):
+        """Call the overloaded instrument specific function to update
+        the instrument data at intervals.
 
         Arguments
-        command_name (str): A method name in self._instrument
-        parameters (dict): Auxilary paramters needed for executing the command
+        interval (int): Time between updating the instrument data.
+        """
+        logger.info("update data thread started")
+        while True:
+            with self._thread_lock:
+                self._update_data()
+            logger.debug("updated data")
+            sleep(interval)
+
+    def _update_data(self):
+        """Update all the current instrument data values (self._data).  This
+        method needs to overloaded per instrument command set.
         """
         pass
+
+    def _process_request(self, request):
+        """Attempt to execute the requested command, if it does not require
+        direct instrument communication. If it requires instrument
+        communication queue the command for orderly execution.
+
+        Arguments:
+        request (dict): Command and command parameters to be executed.
+        """
+        if request["command_name"] == "login":
+            self._login(request["user"], request["password"])
+        elif request["command_name"] == "logout":
+            self._logout()
+        elif request["command_name"] == "get_data":
+            self._get_data(request["parameters"])
+        # Que serial commands (e.g. measure, set_point, ...).
+        elif hasattr(self, request["command_name"]):
+            self._que_request(request)
+        else:
+            # If no command was found set response and return.
+            self._response = {
+                "status": "error",
+                "descripton": "command '{}' not found".format(request["command_name"])
+            }
+
+    def _que_request(self, request):
+        """Que the request to be executed at reasonable time intervals by
+        another thread.
+
+        Arguments:
+        request (dict): Request containing command and parameters to be executed
+            on serial conneted device.
+        """
+        self._queue.put(request)
+        self._response = {
+            "status": "okay",
+            "description": "command queued for execution"
+        }
+        logger.debug("commange {} queued".format(request["command_name"]))
+
+    def _execute_que(self):
+        """Execute commands in the que at a timing intervals sufficiently
+        slow to avoid serial errors.
+        """
+        logger.info("queue execution thread started")
+        while True:
+            request = self._queue.get()
+            logger.debug("getting request from que: {}".format(request))
+            command = request["command_name"]
+            parameters = request["parameters"]
+            if parameters is None:
+                try:
+                    with self._thread_lock:
+                        getattr(self, command)()
+                        logger.info("executed command: {}".format(command))
+                        # Sleep for a short time to avoid buffer conflict
+                        sleep(0.5)
+                except Exception:
+                    logger.error("command failed: {}".format(command))
+            else:
+                try:
+                    with self._thread_lock:
+                        getattr(self, command)(**parameters)
+                        # Sleep for a short time to avoid buffer conflict
+                        sleep(0.5)
+                except Exception:
+                    logger.error("command failed {}({})".format(command, **parameters))
+            sleep(1)
 
     def _load_json(self, message):
         """Try to interpret the message as JSON.
@@ -374,27 +357,17 @@ class SerialInstrument(object):
         if request is None:
             return
 
+        # Check if invalid credentials
+        if not self._validate_credentials(request):
+            return
+
         # Parse the request.
         request = self._parse_request(request)
         if request is None:
             return
 
-        # Return error response if invalid credentials
-        if not self._validate_credentials(request):
-            return
-
-        # Execute the message command.
-        if request["command_name"] == "login":
-            self._login(request["user"], request["password"])
-        elif request["command_name"] == "logout":
-            self._logout()
-        elif request["command_name"] == "get_data":
-            self._get_data(request["parameters"])
-        else:
-            self._execute_command(
-                request["command_name"],
-                request["parameters"]
-            )
+        # Send the request for execution.
+        self._process_request(request)
 
     def _process_write_event(self, conn):
         """Send the self_response back to the client and set the selector to
@@ -422,7 +395,7 @@ class SerialInstrument(object):
         logger.info("message received from {}".format(conn))
         if message:
             self._process_message(message)
-            logger.info("changing connection to write")
+            logger.debug("changing connection to write")
             sel.modify(conn, selectors.EVENT_WRITE, self._handle_connection_event)
         else:
             sel.unregister(conn)
@@ -440,8 +413,10 @@ class SerialInstrument(object):
             self._process_write_event(conn)
 
     def run(self):
-        """Start the update thread and the socket server thread.
+        """Run the socket server. Accept clients and service requests.
         """
+        self._update_thread.start()
+        self._execute_thread.start()
         logger.info("Instrument service run started.")
         while True:
             events = sel.select()
