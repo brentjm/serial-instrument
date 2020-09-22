@@ -373,7 +373,7 @@ class SerialInstrument(object):
         """Send the self_response back to the client and set the selector to
         READ. If it fails, do nothing.
         """
-        response = bytes(json.dumps(self._response), 'ascii')
+        response = json.dumps(self._response).decode('ascii')
         try:
             conn.sendall(response)
             logger.info("wrote message to {}".format(conn))

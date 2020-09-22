@@ -9,8 +9,8 @@ def client(ip, port, message):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect((ip, port))
         for i in range(2):
-            sock.sendall(bytes(message, 'ascii'))
-            response = str(sock.recv(4096), 'ascii')
+            sock.sendall(message.encode('ascii'))
+            response = sock.recv(4096).decode('ascii')
             print("Received: {}".format(response))
             sleep(2)
 
