@@ -12,5 +12,9 @@ COPY --chown=bronkhorst:bronkhorst ./serial-socket/ /home/bronkhorst/python
 #COPY --chown=bronkhorst:bronkhorst ./serial-socket/instruments/bronkhorst/bronkhorst.py /home/bronkhorst/python/
 WORKDIR /home/bronkhorst/python
 
-CMD ["/bin/sh", "-c", "sleep 1000000000"]
-#CMD ["python", "bronkhorst.py"]
+#CMD ["/bin/sh", "-c", "sleep 1000000000"]
+#python -m instruments.bronkhorst.bronkhorst
+#ENTRYPOINT ["python", "--version"]
+#ENTRYPOINT ["python", "./instruments/bronkhorst/bronkhorst.py"]
+ENTRYPOINT ["python", "-m", "instruments.bronkhorst.bronkhorst"]
+#CMD ["-m" "instruments.bronkhorst.bronkhorst"]
