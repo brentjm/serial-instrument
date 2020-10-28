@@ -16,7 +16,6 @@ import coloredlogs
 from time import sleep
 from pdb import set_trace
 #from socket_service.socket_server import ThreadedTCPServer, ThreadedTCPRequestHandler
-logger = logging.getLogger(__name__)
 
 __author__ = "Brent Maranzano"
 __license__ = "MIT"
@@ -50,7 +49,6 @@ class SerialInstrument(object):
         """Start the logger, connect to the instrument (serial), start listening
         on a socket, and initialize the instrument data to None.
         """
-        logger.info("initiating instrument base class")
         self._setup_logger()
         self._user = None
         self._password = None
@@ -62,20 +60,20 @@ class SerialInstrument(object):
         self._update_thread = threading.Thread(target=self._call_updates, daemon=True)
         self._execute_thread = threading.Thread(target=self._execute_que, daemon=True)
         self._create_socket(HOST=socket_ip, PORT=socket_port)
-        logger.info("Instrument initiated")
+        self._logger.info("Instrument initiated")
 
     def _setup_logger(self, config_file="./logger_conf.yml"):
         """Start the logger using the provided configuration file.
         """
-#        try:
-#            with open(config_file, 'rt') as file_obj:
-#                config = yaml.safe_load(file_obj.read())
-#                logging.config.dictConfig(config)
-#                coloredlogs.install()
-#        except Exception as e:
-#            print(e)
-        logging.basicConfig(level=logging.DEBUG)
-        coloredlogs.install(level=logging.DEBUG)
+        try:
+            with open(config_file, 'rt') as file_obj:
+                config = yaml.safe_load(file_obj.read())
+                logging.config.dictConfig(config)
+                coloredlogs.install(level='DEBUG')
+        except Exception as e:
+            print(e)
+        self._logger = logging.getLogger("instrument_logger")
+        self._logger.debug("instrument_server logger setup")
 
     def _create_socket(self, HOST="127.0.0.1", PORT=5007):
         """Create a local socket server, register it with selector that will
@@ -93,7 +91,7 @@ class SerialInstrument(object):
         sock.listen(1)
         sock.setblocking(False)
         sel.register(sock, selectors.EVENT_READ, self._accept_connection)
-        logger.info("Socket server listening on")
+        self._logger.info("Socket server listening on")
 
     def _accept_connection(self, sock, mask):
         """This method is called by the selector when a client attempts
@@ -133,7 +131,7 @@ class SerialInstrument(object):
         """
         if ("user" not in request or "password" not in request
            or "command" not in request):
-            logger.error("request does not contain required keys")
+            self._logger.error("request does not contain required keys")
             self._response = {
                 "status": "error",
                 "descripton": "invalid request format"
@@ -174,7 +172,7 @@ class SerialInstrument(object):
               and request["password"] == self._password):
             valid = True
         else:
-            logger.error("request with invalid credentials")
+            self._logger.error("request with invalid credentials")
             valid = False
             self._response = {
                 "status": "error",
@@ -192,7 +190,7 @@ class SerialInstrument(object):
         """
         self._user = user_name
         self._password = password
-        logger.info("logged in user {}".format(self._user))
+        self._logger.info("logged in user {}".format(self._user))
         self._response = {
             "status": "ok",
             "description": "logged in user {}".format(self._user)
@@ -204,7 +202,7 @@ class SerialInstrument(object):
         """
         self._user = None
         self._password = None
-        logger.info("logged out user {}".format(self._user))
+        self._logger.info("logged out user {}".format(self._user))
         self._response = {
             "status": "ok",
             "description": "logged out user {}".format(self._user)
@@ -246,11 +244,11 @@ class SerialInstrument(object):
         Arguments
         interval (int): Time between updating the instrument data.
         """
-        logger.info("update data thread started")
+        self._logger.info("update data thread started")
         while True:
             with self._thread_lock:
                 self._update_data()
-            logger.debug("updated data")
+            self._logger.debug("updated data")
             sleep(interval)
 
     def _update_data(self):
@@ -296,27 +294,27 @@ class SerialInstrument(object):
             "status": "okay",
             "description": "command queued for execution"
         }
-        logger.debug("commange {} queued".format(request["command_name"]))
+        self._logger.debug("commange {} queued".format(request["command_name"]))
 
     def _execute_que(self):
         """Execute commands in the que at a timing intervals sufficiently
         slow to avoid serial errors.
         """
-        logger.info("queue execution thread started")
+        self._logger.info("queue execution thread started")
         while True:
             request = self._queue.get()
-            logger.debug("getting request from que: {}".format(request))
+            self._logger.debug("getting request from que: {}".format(request))
             command = request["command_name"]
             parameters = request["parameters"]
             if parameters is None:
                 try:
                     with self._thread_lock:
                         getattr(self, command)()
-                        logger.info("executed command: {}".format(command))
+                        self._logger.info("executed command: {}".format(command))
                         # Sleep for a short time to avoid buffer conflict
                         sleep(0.5)
                 except Exception:
-                    logger.error("command failed: {}".format(command))
+                    self._logger.error("command failed: {}".format(command))
             else:
                 try:
                     with self._thread_lock:
@@ -324,7 +322,7 @@ class SerialInstrument(object):
                         # Sleep for a short time to avoid buffer conflict
                         sleep(0.5)
                 except Exception:
-                    logger.error("command failed {}({})".format(command, **parameters))
+                    self._logger.error("command failed {}({})".format(command, **parameters))
             sleep(1)
 
     def _load_json(self, message):
@@ -339,7 +337,7 @@ class SerialInstrument(object):
         try:
             request = json.loads(message)
         except json.decoder.JSONDecodeError:
-            logger.error("message not valid JSON")
+            self._logger.error("message not valid JSON")
             self._response = {
                 "status": "error",
                 "description": "request type not valid JSON"
@@ -376,9 +374,9 @@ class SerialInstrument(object):
         response = json.dumps(self._response, ensure_ascii=True).encode(encoding="UTF-8")
         try:
             conn.sendall(response)
-            logger.info("wrote message to {}".format(conn))
+            self._logger.info("wrote message to {}".format(conn))
         except:
-            logger.error("error sending response")
+            self._logger.error("error sending response")
             pass
         finally:
             sel.modify(conn, selectors.EVENT_READ, self._handle_connection_event)
@@ -392,15 +390,15 @@ class SerialInstrument(object):
         """
         message = conn.recv(4096)
         message = message.decode('utf-8')
-        logger.info("message received from {}".format(conn))
+        self._logger.info("message received from {}".format(conn))
         if message:
             self._process_message(message)
-            logger.debug("changing connection to write")
+            self._logger.debug("changing connection to write")
             sel.modify(conn, selectors.EVENT_WRITE, self._handle_connection_event)
         else:
             sel.unregister(conn)
             conn.close()
-            logger.info("Closed connection to {}".format(conn))
+            self._logger.info("Closed connection to {}".format(conn))
 
     def _handle_connection_event(self, conn, mask):
         """If the event is READ send to _process_read_event and check the return
@@ -417,7 +415,7 @@ class SerialInstrument(object):
         """
         self._update_thread.start()
         self._execute_thread.start()
-        logger.info("Instrument service run started.")
+        self._logger.info("Instrument service run started.")
         while True:
             events = sel.select()
             for key, mask in events:

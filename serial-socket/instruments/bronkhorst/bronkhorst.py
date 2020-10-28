@@ -3,7 +3,7 @@
 
 import logging
 import propar
-from instruments.instrument import SerialInstrument
+from instrument import SerialInstrument
 logger = logging.getLogger(__name__)
 from pdb import set_trace
 

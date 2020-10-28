@@ -4,32 +4,32 @@ disable_existing_loggers: true
 formatters:
     standard:
         format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    error:
+    colored:
         format: "%(levelname)s <PID %(process)d:%(processName)s> %(name)s.%(funcName)s(): %(message)s"
+        (): "coloredlogs.ColoredFormatter"
 
 handlers:
     console:
         class: logging.StreamHandler
-        level: INFO
-        formatter: standard
+        level: DEBUG
+        formatter: colored
         stream: ext://sys.stdout
 
     info_file_handler:
         class: logging.handlers.RotatingFileHandler
         level: INFO
         formatter: standard
-        filename: /tmp/info.log
+        filename: /tmp/instrument.log
         maxBytes: 10000000
         backupCount: 5
         encoding: utf8
 
 root:
-    level: NOTSET
+    level: WARN
     handlers: [console]
-    propogate: yes
 
 loggers:
-    mylogger:
+    instrument_logger:
         level: DEBUG
         handlers: [console, info_file_handler]
         propogate: no

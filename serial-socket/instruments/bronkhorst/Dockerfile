@@ -6,15 +6,9 @@ RUN addgroup -S -g 1001 bronkhorst\
     && sed -i -e /dialout/s/$/,bronkhorst/ /etc/group
 
 USER bronkhorst
-RUN mkdir /home/bronkhorst/python
-COPY --chown=bronkhorst:bronkhorst ./serial-socket/ /home/bronkhorst/python
-#COPY --chown=bronkhorst:bronkhorst ./serial-socket/socket/ /home/bronkhorst/python
-#COPY --chown=bronkhorst:bronkhorst ./serial-socket/instruments/bronkhorst/bronkhorst.py /home/bronkhorst/python/
-WORKDIR /home/bronkhorst/python
+RUN mkdir -p /home/bronkhorst/python/serial-socket
+COPY --chown=bronkhorst:bronkhorst ./serial-socket/ /home/bronkhorst/python/serial-socket
+WORKDIR /home/bronkhorst/python/serial-socket/instruments
 
-#CMD ["/bin/sh", "-c", "sleep 1000000000"]
-#python -m instruments.bronkhorst.bronkhorst
-#ENTRYPOINT ["python", "--version"]
-#ENTRYPOINT ["python", "./instruments/bronkhorst/bronkhorst.py"]
-ENTRYPOINT ["python", "-m", "instruments.bronkhorst.bronkhorst"]
-#CMD ["-m" "instruments.bronkhorst.bronkhorst"]
+CMD ["/bin/sh", "-c", "sleep 1000000000"]
+#ENTRYPOINT ["python", "-m", "bronkhorst.bronkhorst"]
