@@ -10,5 +10,5 @@ RUN mkdir -p /home/bronkhorst/python/serial-socket
 COPY --chown=bronkhorst:bronkhorst ./serial-socket/ /home/bronkhorst/python/serial-socket
 WORKDIR /home/bronkhorst/python/serial-socket/instruments
 
-CMD ["/bin/sh", "-c", "sleep 1000000000"]
-#ENTRYPOINT ["python", "-m", "bronkhorst.bronkhorst"]
+#CMD ["/bin/sh", "-c", "sleep 1000000000"]
+ENTRYPOINT ["python", "-m", "bronkhorst.bronkhorst"]
