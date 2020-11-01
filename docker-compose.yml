@@ -14,6 +14,17 @@ services:
     devices:
       - "/dev/ttyUSB0:/dev/ttyUSB0"
     restart: unless-stopped
+  fake:
+    build:
+      context: .
+      dockerfile: ./serial-socket/instruments/fake/Dockerfile
+    image: fake
+    container_name: fake
+    networks:
+      - equipment      
+    ports:
+      - "5007:5007"
+    restart: unless-stopped
 
 networks:
   equipment:

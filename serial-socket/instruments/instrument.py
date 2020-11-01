@@ -24,27 +24,41 @@ __license__ = "MIT"
 sel = selectors.DefaultSelector()
 
 class SerialInstrument(object):
-    """Base class to abstract serial instruments. The class contains a socket
-    server that services valid message commands by calling the appropriate
-    instrument commands on the attached serial port. Valid commands have the
-    form of:
-        {
-            "user": user_name,
-            "password": password,
-            "command":
-            {
-                "command_name", command_name,
-                "parameters": parameters"
-            }
-        }
-    The class provides a data buffer to provide rapid response of instrument
-    values without over-burdening the serial port.
-
-    The following methods are expected to be over-ridden with instrument
-    specific calls:
-    _connect_instrument - defines the instrument connection to the serial port
-    _set_update_commands - instrument specific commands to update the instrument values
+    """Base class to abstract serial instruments. 
+    1. Creates socket service (self._create_socket).
+    2. Creates serial connection to instrument (self._connect_instrument). Note
+       that this method is over-ridden for each inheriting class for specific
+       instruments.
+    3. A first thread is started that reads the serial instrument values
+       at regular intervals (self._call_updates) and stores the data in
+       the class attribute (self._data). The self._call_updates method calls
+       self._update_data, which must be over-ridden in inhereting classes
+       for specific instruments..
+    4. A second thread is started that executes queued commands sent from
+       connected clients (self._execute_queue).
+    5  The main thread process incoming socket client messages/commands
+       (self._process_message)
+       a. Parse the incoming message (self._load_json) as a UTF-8 encoded 
+          serialized JSON string with the form:
+          {
+              "user": user_name,
+              "password": password,
+              "command":
+              {
+                  "command_name", command_name,
+                  "parameters": parameters"
+              }
+          }
+       b. Validate the credentials of the incoming message
+          (self._validate_credentials).
+       c. Process the request/command (self._process_request).
+          1. Some commands can be serviced by buffered data in class attributes.
+          2. Commands that must be sent to the serial instrument are queued
+             (self._que_request) and executed by a separate thread. The server
+             responds immediately after succesful queueing, so it is up to
+             the client to check back and confirm that the command executed.
     """
+
     def __init__(self, instrument_port, socket_ip, socket_port):
         """Start the logger, connect to the instrument (serial), start listening
         on a socket, and initialize the instrument data to None.
@@ -58,7 +72,7 @@ class SerialInstrument(object):
         self._response = None
         self._thread_lock = threading.Lock()
         self._update_thread = threading.Thread(target=self._call_updates, daemon=True)
-        self._execute_thread = threading.Thread(target=self._execute_que, daemon=True)
+        self._execute_thread = threading.Thread(target=self._execute_queue, daemon=True)
         self._create_socket(HOST=socket_ip, PORT=socket_port)
         self._logger.info("Instrument initiated")
 
@@ -247,7 +261,7 @@ class SerialInstrument(object):
         self._logger.info("update data thread started")
         while True:
             with self._thread_lock:
-                self._update_data()
+                self._data = self._update_data()
             self._logger.debug("updated data")
             sleep(interval)
 
@@ -276,6 +290,7 @@ class SerialInstrument(object):
             self._que_request(request)
         else:
             # If no command was found set response and return.
+            self._logger.info("invalid command called: {}".format(request["command_name"]))
             self._response = {
                 "status": "error",
                 "descripton": "command '{}' not found".format(request["command_name"])
@@ -294,11 +309,12 @@ class SerialInstrument(object):
             "status": "okay",
             "description": "command queued for execution"
         }
-        self._logger.debug("commange {} queued".format(request["command_name"]))
+        self._logger.debug("command {} queued".format(request["command_name"]))
 
-    def _execute_que(self):
+    def _execute_queue(self):
         """Execute commands in the que at a timing intervals sufficiently
-        slow to avoid serial errors.
+        slow to avoid serial errors. The inheretting class methods/commands
+        are called using (getattr(self, command)(**parameters).
         """
         self._logger.info("queue execution thread started")
         while True:
