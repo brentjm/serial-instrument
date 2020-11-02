@@ -76,22 +76,22 @@ def test():
 
     print("test login")
     request["command"] = {"command_name": "login"}
-    print(bronkhorst.process_request(request))
+    print(instrument.process_request(request))
 
     print("test get_data")
     request["command"] = {"command_name": "get_data"}
-    print(bronkhorst.process_request(request))
+    print(instrument.process_request(request))
 
     print("test start")
     request["command"] = {"command_name": "get_data"}
-    print(bronkhorst.process_request(request))
+    print(instrument.process_request(request))
 
     print("test sending invalid command")
     request["command"] = {"command_name": "invalid command"}
-    print(bronkhorst.process_request(request))
+    print(instrument.process_request(request))
 
     print("testing with wrong credentials")
-    print(bronkhorst.process_request({
+    print(instrument.process_request({
         "user": "nobody",
         "password": "wrong",
         "command": {"command_name": "get_data"}
@@ -99,7 +99,7 @@ def test():
 
     print("test logout")
     request["command"] = {"command_name": "logout"}
-    print(bronkhorst.process_request(request))
+    print(instrument.process_request(request))
 
 
 if __name__ == "__main__":

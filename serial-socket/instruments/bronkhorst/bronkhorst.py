@@ -49,7 +49,7 @@ class Bronkhorst(SerialInstrument):
         for attribute in ["flow_rate"]:
             self._data[attribute] = self._instrument.measure
 
-    def _wink(self):
+    def wink(self):
         """Causes the leds on the side to flash.
         """
         self._instrument.wink()
@@ -58,7 +58,6 @@ class Bronkhorst(SerialInstrument):
 
 
 def test():
-    #bronkhorst = Bronkhorst("/dev/ttyUSB0", "172.19.5.2", 5007)
     bronkhorst = Bronkhorst("/dev/ttyUSB0", "127.0.0.1", 5007)
     request = {"user": "unique_user", "password": "123"}
 
@@ -71,7 +70,7 @@ def test():
     print(bronkhorst.process_request(request))
 
     print("test sending command (wink)")
-    request["command"] = {"command_name": "_wink"}
+    request["command"] = {"command_name": "wink"}
     print(bronkhorst.process_request(request))
 
     print("test sending invalid command")
