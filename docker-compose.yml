@@ -1,12 +1,25 @@
 version: '3.5'
 
 services:
-  bronkhorst:
+#  bronkhorst:
+#    build:
+#      context: .
+#      dockerfile: ./serial-socket/instruments/bronkhorst/Dockerfile
+#    image: bronkhorst
+#    container_name: bronkhorst
+#    networks:
+#      - equipment      
+#    ports:
+#      - "5007:5007"
+#    devices:
+#      - "/dev/ttyUSB0:/dev/ttyUSB0"
+#    restart: unless-stopped
+  mettlertoledo:
     build:
       context: .
-      dockerfile: ./serial-socket/instruments/bronkhorst/Dockerfile
-    image: bronkhorst
-    container_name: bronkhorst
+      dockerfile: ./serial-socket/instruments/mettlertoledo_PG5002S/Dockerfile
+    image: mettlertoledo_pg5002s
+    container_name: mettlertoledo_pg5002s
     networks:
       - equipment      
     ports:
@@ -14,17 +27,17 @@ services:
     devices:
       - "/dev/ttyUSB0:/dev/ttyUSB0"
     restart: unless-stopped
-  fake:
-    build:
-      context: .
-      dockerfile: ./serial-socket/instruments/fake/Dockerfile
-    image: fake
-    container_name: fake
-    networks:
-      - equipment      
-    ports:
-      - "5007:5007"
-    restart: unless-stopped
+#  fake:
+#    build:
+#      context: .
+#      dockerfile: ./serial-socket/instruments/fake/Dockerfile
+#    image: fake
+#    container_name: fake
+#    networks:
+#      - equipment      
+#    ports:
+#      - "5007:5007"
+#    restart: unless-stopped
 
 networks:
   equipment:

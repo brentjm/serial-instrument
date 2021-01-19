@@ -12,7 +12,7 @@ def client(ip, port, message, thread_number):
         print("thread {} sending message".format(thread_number))
         response = sock.recv(4096).decode('ascii')
         print("thread {} received message {}".format(thread_number, response))
-        sleep(10000)
+        return
 
 
 if __name__ == "__main__":
@@ -39,5 +39,4 @@ if __name__ == "__main__":
     t3.join()
     t4.join()
     t5.join()
-    sleep(30000)
     print("done")
