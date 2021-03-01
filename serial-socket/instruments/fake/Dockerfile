@@ -1,14 +1,16 @@
-FROM arm32v6/python:3.7-alpine3.11
+FROM python:3.7-alpine3.11
+#FROM arm32v6/python:3.7-alpine3.11
 
-RUN addgroup -S -g 1001 fake\
-    && adduser -S -h /home/fake -s /bin/sh -u 1001 -g 1001 fake\
+RUN addgroup -S -g 1001 instrument\
+    && adduser -S -h /home/instrument -s /bin/sh -u 1001 -g 1001 instrument\
     && pip install PyYAML coloredlogs\
-    && sed -i -e /dialout/s/$/,fake/ /etc/group
+    && sed -i -e /dialout/s/$/,instrument/ /etc/group
 
-USER fake
-RUN mkdir -p /home/fake/python/serial-socket
-COPY --chown=fake:fake ./serial-socket/ /home/fake/python/serial-socket
-WORKDIR /home/fake/python/serial-socket/instruments
+USER instrument
+RUN mkdir -p /home/instrument/python/serial-socket
+COPY --chown=instrument:instrument ./serial-socket/ /home/instrument/python/serial-socket
+WORKDIR /home/instrument/python/serial-socket/instruments
 
 #CMD ["/bin/sh", "-c", "sleep 1000000000"]
-ENTRYPOINT ["python", "-m", "fake.fake"]
+#ENTRYPOINT ["python", "-m", "fake.fake", "--instrument_port", "/dev/ttyUSB0", "--socket_ip", "127.0.0.1", "--socket_port", "5007"]
+ENTRYPOINT ["python", "-m", "fake.fake", "--instrument_port", "/dev/ttyUSB0", "--socket_ip", "0.0.0.0", "--socket_port", "5007"]

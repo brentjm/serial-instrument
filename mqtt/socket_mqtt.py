@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Module to help convert between socket and MQTT
+Module to convert between from MQTT to socket and conversely.
 """
 import argparse
 import logging
@@ -17,10 +17,14 @@ __license__ = "MIT"
 
 
 class SocketMqtt(object):
-    """Converts between MQTT and socket.
+    """Receives messages via MQTT (e.g. a JSON object that contains an
+    instrument command) and redirects to a local socket (that may subsequently
+    send to an instrument serial port to set/change a instrument parameter).
+    Also, reads from a socket (such as instrument data) and tramsmitts via
+    MQTT.
     """
 
-    def __init__(self, socket_host="mettlertoledo_pg5002s", socket_port=5007,
+    def __init__(self, socket_host="", socket_port=5007,
                  mqtt_broker="10.131.72.83", device_name="ape#"):
         """Start the logger, connect to a socket and mqtt broker. Start
         polling the socket for data and publishing on to MQTT.

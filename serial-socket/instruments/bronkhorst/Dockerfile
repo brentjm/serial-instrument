@@ -1,4 +1,4 @@
-FROM arm32v6/python:3.7-alpine3.11
+FROM python:3.7-alpine3.11
 
 RUN addgroup -S -g 1001 bronkhorst\
     && adduser -S -h /home/bronkhorst -s /bin/sh -u 1001 -g 1001 bronkhorst\

@@ -1,16 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-import logging
-import propar
-from instrument import SerialInstrument
-logger = logging.getLogger(__name__)
-from pdb import set_trace
-
 """
 Contains the Bronkhorst class that is a subclass of the
 generic instrument object.
 """
+import logging
+import argparse
+import propar
+from instrument import SerialInstrument
+
+__author__ = "Brent Maranzano"
+__license__ = "MIT"
+
+logger = logging.getLogger(__name__)
 
 
 class Bronkhorst(SerialInstrument):
@@ -90,6 +92,25 @@ def test():
 
 
 if __name__ == "__main__":
-    #bronkhorst = Bronkhorst("/dev/ttyUSB0", "172.19.5.2", 5007)
-    bronkhorst = Bronkhorst("/dev/ttyUSB0", "127.0.0.1", 5007)
+    parser = argparse.ArgumentParser(description="Bronkhorst instrument")
+    parser.add_argument(
+        "--socket_ip",
+        help="host address for the socket to bind",
+        type=str,
+        default="127.0.0.1"
+    )
+    parser.add_argument(
+        "--socket_port",
+        help="port number for the socket server",
+        type=int,
+        default=5007
+    )
+    parser.add_argument(
+        "--instrument_port",
+        help="device port that Bronkhorst is attached",
+        type=str,
+        default="/dev/ttyUSB0"
+    )
+    args = parser.parse_args()
+    bronkhorst = Bronkhorst(args.instrument_port, args.socket_ip, args.socket_port)
     bronkhorst.run()

@@ -14,7 +14,6 @@ import json
 import yaml
 import coloredlogs
 from time import sleep
-from pdb import set_trace
 #from socket_service.socket_server import ThreadedTCPServer, ThreadedTCPRequestHandler
 
 __author__ = "Brent Maranzano"
@@ -24,39 +23,39 @@ __license__ = "MIT"
 sel = selectors.DefaultSelector()
 
 class SerialInstrument(object):
-    """Base class to abstract serial instruments. 
-    1. Creates socket service (self._create_socket).
-    2. Creates serial connection to instrument (self._connect_instrument). Note
-       that this method is over-ridden for each inheriting class for specific
-       instruments.
-    3. A first thread is started that reads the serial instrument values
-       at regular intervals (self._call_updates) and stores the data in
-       the class attribute (self._data). The self._call_updates method calls
-       self._update_data, which must be over-ridden in inhereting classes
-       for specific instruments..
-    4. A second thread is started that executes queued commands sent from
-       connected clients (self._execute_queue).
-    5  The main thread process incoming socket client messages/commands
-       (self._process_message)
-       a. Parse the incoming message (self._load_json) as a UTF-8 encoded 
-          serialized JSON string with the form:
-          {
-              "user": user_name,
-              "password": password,
-              "command":
+    """Base class to abstract serial instruments.
+        1. Creates socket service (self._create_socket).
+        2. Creates serial connection to instrument (self._connect_instrument). Note
+           that this method is over-ridden for each inheriting class for specific
+           instruments.
+        3. A first thread is started that reads the serial instrument values
+           at regular intervals (self._call_updates) and stores the data in
+           the class attribute (self._data). The self._call_updates method calls
+           self._update_data, which must be over-ridden in inhereting classes
+           for specific instruments..
+        4. A second thread is started that executes queued commands sent from
+           connected clients (self._execute_queue).
+        5  The main thread process incoming socket client messages/commands
+           (self._process_message)
+           a. Parse the incoming message (self._load_json) as a UTF-8 encoded
+              serialized JSON string with the form:
               {
-                  "command_name", command_name,
-                  "parameters": parameters"
+                  "user": user_name,
+                  "password": password,
+                  "command":
+                  {
+                      "command_name", command_name,
+                      "parameters": parameters"
+                  }
               }
-          }
-       b. Validate the credentials of the incoming message
-          (self._validate_credentials).
-       c. Process the request/command (self._process_request).
-          1. Some commands can be serviced by buffered data in class attributes.
-          2. Commands that must be sent to the serial instrument are queued
-             (self._que_request) and executed by a separate thread. The server
-             responds immediately after succesful queueing, so it is up to
-             the client to check back and confirm that the command executed.
+           b. Validate the credentials of the incoming message
+              (self._validate_credentials).
+           c. Process the request/command (self._process_request).
+              1. Some commands can be serviced by buffered data in class attributes.
+              2. Commands that must be sent to the serial instrument are queued
+                 (self._que_request) and executed by a separate thread. The server
+                 responds immediately after succesful queueing, so it is up to
+                 the client to check back and confirm that the command executed.
     """
 
     def __init__(self, instrument_port, socket_ip, socket_port):
@@ -146,27 +145,23 @@ class SerialInstrument(object):
         if ("user" not in request or "password" not in request
            or "command" not in request):
             self._logger.error("request does not contain required keys")
+            self._logger.debug("request:\n{}".format(request))
             self._response = {
                 "status": "error",
                 "descripton": "invalid request format"
             }
             request = None
         elif "command_name" not in request["command"]:
+            self._logger.error("request does not contain required keys")
             self._response = {
                 "status": "error",
                 "descripton": "invalid request format"
             }
+            self._logger.debug("request:\n{}".format(request))
             request = None
         else:
-            command_name = request["command"]["command_name"]
-            if "parameters" in request["command"]:
-                parameters = request["command"]["parameters"]
-            else:
-                parameters = None
-            request = {
-                "command_name": command_name,
-                "parameters": parameters
-            }
+            self._logger.debug("request contained necessary keys")
+            self._logger.debug(request)
         return request
 
     def _validate_credentials(self, request):
@@ -182,9 +177,11 @@ class SerialInstrument(object):
         """
         if (self._user is None and self._password is None):
             valid = True
+            self._logger.debug("no user logged into instrument")
         elif (request["user"] == self._user
               and request["password"] == self._password):
             valid = True
+            self._logger.debug("valid user credentials")
         else:
             self._logger.error("request with invalid credentials")
             valid = False
@@ -214,13 +211,13 @@ class SerialInstrument(object):
         """Set the class attributes _user and _password to None to
         "logout" the user. Set the self._response attribute.
         """
-        self._user = None
-        self._password = None
-        self._logger.info("logged out user {}".format(self._user))
+        self._logger.info("logging out user {}".format(self._user))
         self._response = {
             "status": "ok",
-            "description": "logged out user {}".format(self._user)
+            "description": "logging out user {}".format(self._user)
         }
+        self._user = None
+        self._password = None
 
     def _get_data(self, parameters=None):
         """Get the instrument data. If parameters are provided, respond
@@ -272,22 +269,32 @@ class SerialInstrument(object):
         pass
 
     def _process_request(self, request):
-        """Attempt to execute the requested command, if it does not require
-        direct instrument communication. If it requires instrument
-        communication queue the command for orderly execution.
+        """If the request does not require instrument communication (e.g.
+        _login, _logout, _get_data), attempt to service the request. If the
+        request does require direct instrument communication, communication
+        queue the command for orderly execution.
 
         Arguments:
         request (dict): Command and command parameters to be executed.
         """
-        if request["command_name"] == "login":
+        if request["command"]["command_name"] == "login":
             self._login(request["user"], request["password"])
-        elif request["command_name"] == "logout":
+        elif request["command"]["command_name"] == "logout":
             self._logout()
-        elif request["command_name"] == "get_data":
-            self._get_data(request["parameters"])
-        # Que serial commands (e.g. measure, set_point, ...).
-        elif hasattr(self, request["command_name"]):
-            self._que_request(request)
+        elif request["command"]["command_name"] == "get_data":
+            self._get_data(request["command"]["parameters"])
+        # Queue serial commands (e.g. measure, set_point, ...).
+        elif hasattr(self, request["command"]["command_name"]):
+            command_name = request["command"]["command_name"]
+            if "parameters" in request["command"]:
+                parameters = request["command"]["parameters"]
+            else:
+                parameters = None
+            command = {
+                "command_name": command_name,
+                "parameters": parameters
+            }
+            self._que_request(command)
         else:
             # If no command was found set response and return.
             self._logger.info("invalid command called: {}".format(request["command_name"]))
@@ -297,7 +304,7 @@ class SerialInstrument(object):
             }
 
     def _que_request(self, request):
-        """Que the request to be executed at reasonable time intervals by
+        """Queue the request to be executed at reasonable time intervals by
         another thread.
 
         Arguments:
@@ -352,16 +359,21 @@ class SerialInstrument(object):
         request = None
         try:
             request = json.loads(message)
+            self._logger.debug("message is valid JSON")
         except json.decoder.JSONDecodeError:
             self._logger.error("message not valid JSON")
+            self._logger.error("message: {}".format(message))
             self._response = {
                 "status": "error",
                 "description": "request type not valid JSON"
             }
+            self._logger.debug("request:\n{}".format(request))
         return request
 
     def _process_message(self, message):
-        """Process the message, and set the self._response attribute.
+        """If the message is valid JSON and has valid credentials
+        then extract the request (i.e. command) from the message
+        and call the _process_request(request) method.
 
         Arguments:
         message (JSON): See class description for valid format.
@@ -371,11 +383,11 @@ class SerialInstrument(object):
         if request is None:
             return
 
-        # Check if invalid credentials
+        # Check credentials
         if not self._validate_credentials(request):
             return
 
-        # Parse the request.
+        # Check if valid request
         request = self._parse_request(request)
         if request is None:
             return
@@ -387,12 +399,14 @@ class SerialInstrument(object):
         """Send the self_response back to the client and set the selector to
         READ. If it fails, do nothing.
         """
-        response = json.dumps(self._response, ensure_ascii=True).encode(encoding="UTF-8")
+        response = json.dumps(self._response, ensure_ascii=True)
         try:
-            conn.sendall(response)
+            conn.sendall(response.encode(encoding="UTF-8"))
             self._logger.info("wrote message to {}".format(conn))
+            self._logger.debug("message:\n{}".format(response))
         except:
             self._logger.error("error sending response")
+            self._logger.error("message:\n{}".format(response))
             pass
         finally:
             sel.modify(conn, selectors.EVENT_READ, self._handle_connection_event)
@@ -407,6 +421,7 @@ class SerialInstrument(object):
         message = conn.recv(4096)
         message = message.decode('utf-8')
         self._logger.info("message received from {}".format(conn))
+        self._logger.debug("message:\n{}".format(message))
         if message:
             self._process_message(message)
             self._logger.debug("changing connection to write")
