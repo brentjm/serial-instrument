@@ -3,6 +3,7 @@
 """
 Module to convert between from MQTT to socket and conversely.
 """
+import socket
 import argparse
 import logging
 import logging.config
@@ -32,7 +33,7 @@ class SocketMqtt(object):
         Arguments:
         socket_host (str): Name of the socket host. This is the service
             name if started with docker-compose.
-        socket_port (int): Port number of the socket used to 
+        socket_port (int): Port number of the socket used to
             interact with instrument.
         mqtt_broker (str): Namre or address of the MQTT broker.
         """
