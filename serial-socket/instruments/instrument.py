@@ -3,6 +3,7 @@
 """
 Module to provide abstract base class for creating a serial instrument.
 """
+import os
 import threading
 import queue
 import socket
@@ -14,7 +15,6 @@ import json
 import yaml
 import coloredlogs
 from time import sleep
-#from socket_service.socket_server import ThreadedTCPServer, ThreadedTCPRequestHandler
 
 __author__ = "Brent Maranzano"
 __license__ = "MIT"
@@ -65,6 +65,7 @@ class SerialInstrument(object):
         self._setup_logger()
         self._user = None
         self._password = None
+        self._set_about()
         self._data = {}
         self._instrument = self._connect_instrument(instrument_port)
         self._queue = queue.Queue()
@@ -129,6 +130,26 @@ class SerialInstrument(object):
         port (str): Filename of device (e.g. "/dev/ttyUSB0")
         """
         pass
+
+    def _set_about(self):
+        """Set some class attributes that define what the name of the
+        microcomputer this is running and what type of instrument the
+        microcomputer is connected. This method should be over-ridden
+        to set data from each instrument connection.
+        # TODO: get the HOST env in separate function.
+        """
+        self._about = {
+                "host": os.getenv("HOST")
+        }
+        self._logger.debug("about: {}".format(self._about))
+
+    def _get_about(self):
+        """Get information about the microcomputer and attached instrument.
+        """
+        self._response = {
+            "stauts": "ok",
+            "value": self._about
+        }
 
     def _parse_request(self, request):
         """Parse the request to get the command name and parameters. If
@@ -277,31 +298,35 @@ class SerialInstrument(object):
         Arguments:
         request (dict): Command and command parameters to be executed.
         """
-        if request["command"]["command_name"] == "login":
-            self._login(request["user"], request["password"])
-        elif request["command"]["command_name"] == "logout":
-            self._logout()
+        # Retrieve data without requiring credentials
+        if request["command"]["command_name"] == "get_about":
+            self._get_about()
         elif request["command"]["command_name"] == "get_data":
             self._get_data(request["command"]["parameters"])
-        # Queue serial commands (e.g. measure, set_point, ...).
-        elif hasattr(self, request["command"]["command_name"]):
-            command_name = request["command"]["command_name"]
-            if "parameters" in request["command"]:
-                parameters = request["command"]["parameters"]
+        elif self._validate_credentials(request):
+            if request["command"]["command_name"] == "login":
+                self._login(request["user"], request["password"])
+            elif request["command"]["command_name"] == "logout":
+                self._logout()
+            # Queue serial commands (e.g. measure, set_point, ...).
+            elif hasattr(self, request["command"]["command_name"]):
+                command_name = request["command"]["command_name"]
+                if "parameters" in request["command"]:
+                    parameters = request["command"]["parameters"]
+                else:
+                    parameters = None
+                command = {
+                    "command_name": command_name,
+                    "parameters": parameters
+                }
+                self._que_request(command)
             else:
-                parameters = None
-            command = {
-                "command_name": command_name,
-                "parameters": parameters
-            }
-            self._que_request(command)
-        else:
-            # If no command was found set response and return.
-            self._logger.info("invalid command called: {}".format(request["command_name"]))
-            self._response = {
-                "status": "error",
-                "descripton": "command '{}' not found".format(request["command_name"])
-            }
+                # If no command was found set response and return.
+                self._logger.info("invalid command called: {}".format(request["command_name"]))
+                self._response = {
+                    "status": "error",
+                    "descripton": "command '{}' not found".format(request["command_name"])
+                }
 
     def _que_request(self, request):
         """Queue the request to be executed at reasonable time intervals by
@@ -371,9 +396,9 @@ class SerialInstrument(object):
         return request
 
     def _process_message(self, message):
-        """If the message is valid JSON and has valid credentials
-        then extract the request (i.e. command) from the message
-        and call the _process_request(request) method.
+        """If the message is valid JSON and a valid command format, then
+        extract the request (i.e. command) from the message and call the
+        _process_request(request) method.
 
         Arguments:
         message (JSON): See class description for valid format.
@@ -381,10 +406,6 @@ class SerialInstrument(object):
         # Try to create dict from message (valid JSON).
         request = self._load_json(message)
         if request is None:
-            return
-
-        # Check credentials
-        if not self._validate_credentials(request):
             return
 
         # Check if valid request
@@ -396,7 +417,7 @@ class SerialInstrument(object):
         self._process_request(request)
 
     def _process_write_event(self, conn):
-        """Send the self_response back to the client and set the selector to
+        """Send the self._response back to the client and set the selector to
         READ. If it fails, do nothing.
         """
         response = json.dumps(self._response, ensure_ascii=True)

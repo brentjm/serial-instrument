@@ -3,6 +3,7 @@
 """
 Simulates a fake serial instrument for testing the software stack.
 """
+import os
 import logging
 import argparse
 import random
@@ -48,6 +49,17 @@ class FakeInstrument(SerialInstrument):
         else:
             self._logger.info("Connected to instrument on port {}".format(port))
         return connection
+
+    def _set_about(self):
+        """Setting attributes about the host microcomputer
+        and connected instrument.
+        """
+        self._about = {
+            "host": os.getenv("HOST"),
+            "instrument": "fake",
+            "descriptions": "fake serial instrument for testing"
+        }
+        self._logger.debug("about: {}".format(self._about))
 
     def _update_data(self):
         """Update the values (PV) of the fake instrument.

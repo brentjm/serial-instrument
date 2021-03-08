@@ -8,7 +8,7 @@ services:
 #    image: bronkhorst
 #    container_name: bronkhorst
 #    networks:
-#      - equipment      
+#      - equipment
 #    ports:
 #      - "5007:5007"
 #    devices:
@@ -21,7 +21,7 @@ services:
 #    image: mettlertoledo_pg5002s
 #    container_name: mettlertoledo_pg5002s
 #    networks:
-#      - equipment      
+#      - equipment
 #    ports:
 #      - "5007:5007"
 #    devices:
@@ -34,10 +34,10 @@ services:
     image: fake
     container_name: fake
     networks:
-      - equipment      
-    ports:
-      - "5007:5007"
+      - equipment
     restart: unless-stopped
+    env_file:
+      - service-variables.env
   test-client:
     build:
       context: .
@@ -45,8 +45,20 @@ services:
     image: test-client
     container_name: test-client
     networks:
-      - equipment      
+      - equipment
     restart: "no"
+  socket-mqtt:
+    build:
+      context: ./socket-mqtt
+      #dockerfile: ./socket-mqtt/Dockerfile
+    image: socket-mqtt
+    container_name: socket-mqtt
+    env_file:
+      - service-variables.env
+    networks:
+      - equipment
+    restart: unless-stopped
+
 
 networks:
   equipment:

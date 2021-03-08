@@ -16,6 +16,8 @@ class TestClient(object):
         self._sock = self._make_connection(socket_ip, socket_port)
 
     def _setup_logger(self):
+        """Start the logger.
+        """
         self._logger = logging.getLogger("instrument_client_logger")
         self._logger.setLevel(logging.INFO)
         handler = logging.StreamHandler()
@@ -28,6 +30,17 @@ class TestClient(object):
         sock.connect((ip, port))
         self._logger.info("connected to socket:\n{}".format(sock))
         return sock
+
+    def get_about(self):
+        message = {
+                "user": None,
+                "password": None,
+                "command": {
+                    "command_name": "get_about",
+                    "parameters": None
+                }
+        }
+        self._send_message(message)
 
     def login(self):
         message = {
@@ -97,8 +110,8 @@ class TestClient(object):
 
     def get_data(self):
         message = {
-                "user": self._username,
-                "password": self._password,
+                "user": None,
+                "password": None,
                 "command": {
                     "command_name": "get_data",
                     "parameters": None
@@ -106,17 +119,18 @@ class TestClient(object):
         }
         self._send_message(message)
 
-
     def _send_message(self, message):
         message = json.dumps(message)
         self._logger.info("sending message:\n{}".format(message))
         self._sock.sendall(message.encode('ascii'))
         received = self._sock.recv(4096)
+        received = json.loads(received.decode('ascii'))
         self._logger.info("received message:\n{}".format(received))
         return
 
     def run(self):
         self.login()
+        self.get_about()
         self.set_SP1(5)
         self.set_SP2(12)
         self.start()
@@ -131,7 +145,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="socket client")
     parser.add_argument(
         "--socket_ip",
-        help="IP address of the instrument socket server",
+        help="host name or IP address of the instrument socket server",
         type=str,
         default="fake"
     )
