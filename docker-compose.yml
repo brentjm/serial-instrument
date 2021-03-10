@@ -27,6 +27,21 @@ services:
 #    devices:
 #      - "/dev/ttyUSB0:/dev/ttyUSB0"
 #    restart: unless-stopped
+#  ika:
+#    build:
+#      context: .
+#      dockerfile: ./serial-socket/instruments/ika/Dockerfile
+#    image: ika
+#    container_name: ika
+#    networks:
+#      - equipment
+#    ports:
+#      - "54132:54132"
+#    devices:
+#      - "/dev/ttyUSB0:/dev/ttyUSB0"
+#    restart: unless-stopped
+#    env_file:
+#      - service-variables.env
   fake:
     build:
       context: .

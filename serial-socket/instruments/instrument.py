@@ -106,7 +106,7 @@ class SerialInstrument(object):
         sock.listen(1)
         sock.setblocking(False)
         sel.register(sock, selectors.EVENT_READ, self._accept_connection)
-        self._logger.info("Socket server listening on")
+        self._logger.info("Socket server listening on {}:{}".format(HOST, PORT))
 
     def _accept_connection(self, sock, mask):
         """This method is called by the selector when a client attempts
