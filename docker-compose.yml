@@ -10,7 +10,7 @@ services:
 #    networks:
 #      - equipment
 #    ports:
-#      - "5007:5007"
+#      - "54132:54132"
 #    devices:
 #      - "/dev/ttyUSB0:/dev/ttyUSB0"
 #    restart: unless-stopped
@@ -23,7 +23,7 @@ services:
 #    networks:
 #      - equipment
 #    ports:
-#      - "5007:5007"
+#      - "54132:54132"
 #    devices:
 #      - "/dev/ttyUSB0:/dev/ttyUSB0"
 #    restart: unless-stopped
@@ -38,15 +38,17 @@ services:
     restart: unless-stopped
     env_file:
       - service-variables.env
-  test-client:
-    build:
-      context: .
-      dockerfile: ./serial-socket/test-client/Dockerfile
-    image: test-client
-    container_name: test-client
-    networks:
-      - equipment
-    restart: "no"
+#  test-client:
+#    build:
+#      context: .
+#      dockerfile: ./serial-socket/test-client/Dockerfile
+#    image: test-client
+#    container_name: test-client
+#    networks:
+#      - equipment
+#    restart: "no"
+#    depends_on:
+#      - fake
   socket-mqtt:
     build:
       context: ./socket-mqtt
@@ -58,6 +60,8 @@ services:
     networks:
       - equipment
     restart: unless-stopped
+    depends_on:
+      - fake
 
 
 networks:

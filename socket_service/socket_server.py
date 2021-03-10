@@ -33,7 +33,7 @@ def client(ip, port, message):
 
 if __name__ == "__main__":
     # Port 0 means to select an arbitrary unused port
-    HOST, PORT = "localhost", 5007
+    HOST, PORT = "localhost", 54132
 
     server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
     with server:

@@ -153,7 +153,7 @@ if __name__ == "__main__":
         "--socket_port",
         help="port number of the instrument socket server",
         type=int,
-        default=5007
+        default=54132
     )
     args = parser.parse_args()
     print("begin wait")

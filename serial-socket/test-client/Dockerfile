@@ -11,4 +11,4 @@ COPY --chown=instrument:instrument ./serial-socket/test-client/test-client.py /h
 WORKDIR /home/instrument/python/test-client
 
 #CMD ["/bin/sh", "-c", "sleep 1000000000"]
-ENTRYPOINT ["python", "-m", "test-client", "--socket_ip", "fake", "--socket_port", "5007"]
+ENTRYPOINT ["python", "-m", "test-client", "--socket_ip", "fake", "--socket_port", "54132"]

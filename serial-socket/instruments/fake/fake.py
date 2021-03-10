@@ -68,6 +68,8 @@ class FakeInstrument(SerialInstrument):
         """
         data = {}
         data["status"] = self._status
+        data["user"] = self._user
+        data["user_tag"] = self._user_tag
         data["SP1"] = self._SP1
         data["SP2"] = self._SP2
         if self._status is "on":
@@ -86,7 +88,7 @@ class FakeInstrument(SerialInstrument):
         Return (dict): Status of command.
         """
         self._SP1 = value
-        response = {"status": "ok", "description": "successful set SP1"}
+        response = {"socket response": "ok", "description": "successful set SP1"}
         return response
 
     def set_SP2(self, value=0):
@@ -97,21 +99,21 @@ class FakeInstrument(SerialInstrument):
         Return (dict): Status of command.
         """
         self._SP2 = value
-        response = {"status": "ok", "description": "successful set SP2"}
+        response = {"socket response": "ok", "description": "successful set SP2"}
         return response
 
     def start(self):
         """Start the fake instrument.
         """
         self._status = "on"
-        response = {"status": "ok", "description": "successful start"}
+        response = {"socket response": "ok", "description": "successful start"}
         return response
 
     def stop(self):
         """Stop the fake instrument.
         """
         self._status = "off"
-        response = {"status": "ok", "description": "successful stop"}
+        response = {"socket response": "ok", "description": "successful stop"}
         return response
 
 
@@ -127,7 +129,7 @@ if __name__ == "__main__":
         "--socket_port",
         help="port number for the socket server",
         type=int,
-        default=5007
+        default=54132
     )
     parser.add_argument(
         "--instrument_port",

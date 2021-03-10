@@ -41,7 +41,7 @@ class SocketMqtt(object):
     MQTT.
     """
 
-    def __init__(self, socket_host="", socket_port=5007,
+    def __init__(self, socket_host="", socket_port=54132,
                  mqtt_broker="", client_id="ape#"):
         """Start the logger, connect to a socket and mqtt broker. Start
         polling the socket for data and publishing on to MQTT.
@@ -71,7 +71,9 @@ class SocketMqtt(object):
         self._logger.info("socket-mqtt logger setup")
 
     def _connect_socket(self, host, port):
-        """Connect to socket.
+        """Connect to socket. Note that the socket is left
+        as blocking and shouldn't be modified unless a selector
+        is used.
 
         Arguments:
         host (string): hostname or IP address of host.
@@ -79,10 +81,16 @@ class SocketMqtt(object):
 
         Returns a socket connection.
         """
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((host, port))
-        self._logger.info(
-                "Connected to socket host: {}, port: {}".format(host, port))
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((host, port))
+        except socket.error as err:
+            self._logger.error(
+                    "Failed to connect to socket {}:{}".format(host, port))
+            raise err
+        else:
+            self._logger.info(
+                    "Connected to socket host: {}, port: {}".format(host, port))
         return sock
 
     def _connect_mqtt(self, mqtt_broker, client_id):
@@ -92,11 +100,17 @@ class SocketMqtt(object):
         mqtt_broker (str): Server name or IP address of MQTT broker.
         client_id (str): MQTT client id (e.g. ape-5)
         """
-        mqttc = mqtt.Client(client_id=client_id)
-        mqttc.on_connect = self._create_on_connect()
-        mqttc.on_message = self._create_on_message()
-        mqttc.connect(mqtt_broker, 1883, 60)
-        self._logger.info("Connected to MQTT broker: {}".format(mqtt_broker))
+        self._logger.debug("attempting to connect to MQTT: {}".format(mqtt_broker))
+        try:
+            mqttc = mqtt.Client(client_id=client_id)
+            mqttc.on_connect = self._create_on_connect()
+            mqttc.on_message = self._create_on_message()
+            mqttc.connect(mqtt_broker, 1883, 10)
+        except Exception as err:
+            self._logger.error("Could not connect to MQTT broker")
+            raise err
+        else:
+            self._logger.info("Connected to MQTT broker: {}".format(mqtt_broker))
         return mqttc
 
     def _create_on_connect(self):
@@ -114,9 +128,9 @@ class SocketMqtt(object):
                     }
             }
             about = self._send_message(message)
-            self._logger.debug("publishing about:\n{}".format(about))
+            self._logger.debug("on_connect callback publish about")
             self._mqttc.publish("{}/about".format(self._client_id),
-                payload=about, qos=0, retain=True)
+                payload=json.dumps(about), qos=0, retain=True)
         return on_connect
 
     def _create_on_message(self):
@@ -126,22 +140,45 @@ class SocketMqtt(object):
         Return function
         """
         def on_message(client, userdata, message):
-            status = self._send_message(message)
+            payload = json.loads(message.payload.decode('ascii'))
+            self._logger.debug("received message:\n{}".format(payload))
+            status = self._send_message(payload)
         return on_message
 
     def _send_message(self, message):
-        message = json.dumps(message)
+        """Send a message to the host socket.
+
+        Arguments:
+        message (JSON): Message to be sent to socket
+
+        Returns (JSON) The response from the socket.
+        """
+        received = {"status": "failed"}
         self._logger.debug("sending message to socket:\n{}".format(message))
-        self._sock.sendall(message.encode('ascii'))
-        received = self._sock.recv(4096)
-        received = json.dumps(received.decode('ascii'))
-        self._logger.debug("received message from socket:\n{}".format(received))
+        message = json.dumps(message).encode('ascii')
+        try:
+            self._sock.sendall(message)
+        except Exception as err:
+            self._logger.error("error sending message to socket:\n{}".format(err))
+        else:
+            try:
+                received = self._sock.recv(4096)
+            except Exception as err:
+                self._logger.error("error receiving message from socket:\n{}".format(err))
+            else:
+                received = json.loads(received.decode('ascii'))
+                self._logger.debug("received message from socket:\n{}".format(received))
         return received
 
     def run(self):
         """Start the MQTT service loop; send the instrument startup information,
         then start infinite loop sending instrument data.
         """
+        subscribe_topic = "{}/command".format(self._client_id)
+        self._mqttc.subscribe(subscribe_topic)
+        self._logger.debug("set subscribe topic: {}".format(subscribe_topic))
+        publish_topic = "{}/data".format(self._client_id)
+        self._logger.debug("set publish topic: {}".format(publish_topic))
         self._logger.info("Starting MQTT Loop")
         self._mqttc.loop_start()
         message = {
@@ -155,8 +192,8 @@ class SocketMqtt(object):
         while True:
             # get data
             data = self._send_message(message)
-            self._logger.debug("publishing:\n{}".format(data))
-            self._mqttc.publish("{}/data".format(self._client_id), payload=data)
+            self._logger.debug("publish\n{}".format(data))
+            self._mqttc.publish(publish_topic, payload=json.dumps(data))
             sleep(5)
 
 
@@ -172,7 +209,7 @@ if __name__ == "__main__":
         "--socket_port",
         help="port number for the socket server",
         type=int,
-        default=5007
+        default=54132
     )
     parser.add_argument(
         "--mqtt_broker",

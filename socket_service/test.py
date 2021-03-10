@@ -38,7 +38,7 @@ class Server(object):
         update_thread.start()
 
         # Port 0 means to select an arbitrary unused port
-        HOST, PORT = "localhost", 5007
+        HOST, PORT = "localhost", 54132
 
         server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
         with server:

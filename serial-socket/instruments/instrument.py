@@ -67,6 +67,7 @@ class SerialInstrument(object):
         self._password = None
         self._set_about()
         self._data = {}
+        self._user_tag = "untagged"
         self._instrument = self._connect_instrument(instrument_port)
         self._queue = queue.Queue()
         self._response = None
@@ -89,7 +90,7 @@ class SerialInstrument(object):
         self._logger = logging.getLogger("instrument_logger")
         self._logger.debug("instrument_server logger setup")
 
-    def _create_socket(self, HOST="127.0.0.1", PORT=5007):
+    def _create_socket(self, HOST="127.0.0.1", PORT=54132):
         """Create a local socket server, register it with selector that will
         call self._accept connection upon READ events (i.e. client
         connections).
@@ -147,7 +148,7 @@ class SerialInstrument(object):
         """Get information about the microcomputer and attached instrument.
         """
         self._response = {
-            "stauts": "ok",
+            "socket response": "ok",
             "value": self._about
         }
 
@@ -168,14 +169,14 @@ class SerialInstrument(object):
             self._logger.error("request does not contain required keys")
             self._logger.debug("request:\n{}".format(request))
             self._response = {
-                "status": "error",
+                "socket response": "error",
                 "descripton": "invalid request format"
             }
             request = None
         elif "command_name" not in request["command"]:
             self._logger.error("request does not contain required keys")
             self._response = {
-                "status": "error",
+                "socket response": "error",
                 "descripton": "invalid request format"
             }
             self._logger.debug("request:\n{}".format(request))
@@ -207,7 +208,7 @@ class SerialInstrument(object):
             self._logger.error("request with invalid credentials")
             valid = False
             self._response = {
-                "status": "error",
+                "socket response": "error",
                 "description": "invalid user name or password"
             }
         return valid
@@ -224,7 +225,7 @@ class SerialInstrument(object):
         self._password = password
         self._logger.info("logged in user {}".format(self._user))
         self._response = {
-            "status": "ok",
+            "socket response": "ok",
             "description": "logged in user {}".format(self._user)
         }
 
@@ -234,11 +235,26 @@ class SerialInstrument(object):
         """
         self._logger.info("logging out user {}".format(self._user))
         self._response = {
-            "status": "ok",
+            "socket response": "ok",
             "description": "logging out user {}".format(self._user)
         }
         self._user = None
         self._password = None
+
+    def _set_user_tag(self, tag):
+        """
+        "Provide a method to set some tag provided by the user.
+        For example, the current experiment name, run #, ...etc
+
+        Arguments
+        tag (str): User tag that is transmitted with data.
+        """
+        self._logger.info("setting user tag{}".format(tag))
+        self._response = {
+            "socket response": "ok",
+            "description": "setting user tag {}".format(tag)
+        }
+        self._user_tag = tag
 
     def _get_data(self, parameters=None):
         """Get the instrument data. If parameters are provided, respond
@@ -251,22 +267,18 @@ class SerialInstrument(object):
         Returns a dictionary of the instruement data {parameter: parameter_value}
         """
         if parameters is None:
-            self._response = {
-                "status": "ok",
-                "value": self._data
-            }
+            self._response = self._data
+            self._response["socket response"] = "ok"
         else:
             if type(parameters) is str:
                 parameters = [parameters]
             try:
-                self._response = {
-                    "stauts": "ok",
-                    "value": {k: self._data[parameters[k]] for k in parameters}
-                }
+                self._response = {k: self._data[parameters[k]] for k in parameters}
+                self._response["socket response"] = "ok"
             except KeyError:
                 self._response = {
-                    "status": "error",
-                    "value": "invalid data key(s): {}".format(parameters)
+                    "socket response": "error",
+                    "description": "invalid data key(s): {}".format(parameters)
                 }
 
     def _call_updates(self, interval=10):
@@ -308,6 +320,8 @@ class SerialInstrument(object):
                 self._login(request["user"], request["password"])
             elif request["command"]["command_name"] == "logout":
                 self._logout()
+            elif request["command"]["command_name"] == "set_user_tag":
+                self._set_user_tag(request["command"]["parameters"])
             # Queue serial commands (e.g. measure, set_point, ...).
             elif hasattr(self, request["command"]["command_name"]):
                 command_name = request["command"]["command_name"]
@@ -324,7 +338,7 @@ class SerialInstrument(object):
                 # If no command was found set response and return.
                 self._logger.info("invalid command called: {}".format(request["command_name"]))
                 self._response = {
-                    "status": "error",
+                    "socket response": "error",
                     "descripton": "command '{}' not found".format(request["command_name"])
                 }
 
@@ -338,7 +352,7 @@ class SerialInstrument(object):
         """
         self._queue.put(request)
         self._response = {
-            "status": "okay",
+            "socket response": "okay",
             "description": "command queued for execution"
         }
         self._logger.debug("command {} queued".format(request["command_name"]))
@@ -389,7 +403,7 @@ class SerialInstrument(object):
             self._logger.error("message not valid JSON")
             self._logger.error("message: {}".format(message))
             self._response = {
-                "status": "error",
+                "socket response": "error",
                 "description": "request type not valid JSON"
             }
             self._logger.debug("request:\n{}".format(request))
@@ -440,8 +454,8 @@ class SerialInstrument(object):
         conn (socket connection): A socket connection to a client.
         """
         message = conn.recv(4096)
-        message = message.decode('utf-8')
-        self._logger.info("message received from {}".format(conn))
+        message = message.decode('ascii')
+        self._logger.debug("message received from {}".format(conn))
         self._logger.debug("message:\n{}".format(message))
         if message:
             self._process_message(message)
@@ -487,7 +501,7 @@ if __name__ == "__main__":
         "--socket_port",
         help="port number for the socket server",
         type=int,
-        default=5007
+        default=54132
     )
     parser.add_argument(
         "--instrument_port",

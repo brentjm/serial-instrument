@@ -61,5 +61,5 @@ class MettlerToledo(SerialInstrument):
 
 
 if __name__ == "__main__":
-    balance = MettlerToledo("/dev/ttyUSB0", "127.0.0.1", 5007)
+    balance = MettlerToledo("/dev/ttyUSB0", "127.0.0.1", 54132)
     balance.run()

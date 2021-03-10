@@ -160,7 +160,7 @@ if __name__ == "__main__":
         "--port",
         help="port number for the socket server",
         type=int,
-        default=5007
+        default=54132
     )
     parser.add_argument(
         "--request",

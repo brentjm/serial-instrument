@@ -60,7 +60,7 @@ class Bronkhorst(SerialInstrument):
 
 
 def test():
-    bronkhorst = Bronkhorst("/dev/ttyUSB0", "127.0.0.1", 5007)
+    bronkhorst = Bronkhorst("/dev/ttyUSB0", "127.0.0.1", 54132)
     request = {"user": "unique_user", "password": "123"}
 
     print("test login")
@@ -103,7 +103,7 @@ if __name__ == "__main__":
         "--socket_port",
         help="port number for the socket server",
         type=int,
-        default=5007
+        default=54132
     )
     parser.add_argument(
         "--instrument_port",
