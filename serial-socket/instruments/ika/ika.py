@@ -105,10 +105,14 @@ class Ika(SerialInstrument):
 
         Return (dict): Status of command.
         """
+        command = "OUT_SP_4 {:.2f} \r \n".format(value)
         try:
-            self._instrument.write("OUT_SP_4 {:.2f} \r \n".format(value).encode('ascii'))
+            self._instrument.write(command.encode('ascii'))
+            response = {"socket response": "ok",
+                        "description": "sent command: {}".format(command)}
         except:
-            response = {"socket response": "ok", "description": "sent set speed command"}
+            response = {"socket response": "error",
+                        "description": "sent command: {}".format(command)}
         return response
 
 

@@ -44,8 +44,8 @@ class SerialInstrument(object):
                   "password": password,
                   "command":
                   {
-                      "command_name", command_name,
-                      "parameters": parameters"
+                      "command_name": command_name,
+                      "parameters": {"param_1": value_1, "param_2": value_2, ...}
                   }
               }
            b. Validate the credentials of the incoming message
@@ -56,6 +56,9 @@ class SerialInstrument(object):
                  (self._que_request) and executed by a separate thread. The server
                  responds immediately after succesful queueing, so it is up to
                  the client to check back and confirm that the command executed.
+                 Note that commands are executed as below and thus the called methods
+                 must use keyword arguments.
+                 getattr(instrument_object, command)(**params)
     """
 
     def __init__(self, instrument_port, socket_ip, socket_port):
