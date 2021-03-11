@@ -8,6 +8,7 @@ import logging
 import argparse
 import random
 from time import sleep
+from serial import Serial
 from instrument import SerialInstrument
 
 __author__ = "Brent Maranzano"
@@ -31,6 +32,7 @@ class Ika(SerialInstrument):
 
     def __init__(self, instrument_port, socket_ip, socket_port):
         super().__init__(instrument_port, socket_ip, socket_port)
+        self._instrument.write("START_4 \r \n".encode('ascii'))
 
     def _connect_instrument(self, port):
         """Connect to the IKA using RS232
@@ -52,7 +54,7 @@ class Ika(SerialInstrument):
     def _set_about(self):
         """Setting attributes about the host microcomputer
         and connected instrument.
-        """
+       """
         self._about = {
             "host": os.getenv("HOST"),
             "instrument": "IKA",
@@ -77,11 +79,11 @@ class Ika(SerialInstrument):
 
         Return (float): current speed SP
         """
-        buffer = self._ser.inWaiting()
-        junk = self._ser.read(buffer)
-        self._ser.write("IN_SP_4 \r \n".encode('ascii'))
+        buffer = self._instrument.inWaiting()
+        junk = self._instrument.read(buffer)
+        self._instrument.write("IN_SP_4 \r \n".encode('ascii'))
         sleep(0.3)
-        speed = float(ser.readline().decode('ascii').split(" ")[0])
+        speed = float(self._instrument.readline().decode('ascii').split(" ")[0])
         return speed
 
     def _get_PV_speed(self):
@@ -89,11 +91,11 @@ class Ika(SerialInstrument):
 
         Return (float): current speed present value
         """
-        buffer = self._ser.inWaiting()
-        junk = self._ser.read(buffer)
-        self._ser.write("IN_PV_4 \r \n".encode('ascii'))
+        buffer = self._instrument.inWaiting()
+        junk = self._instrument.read(buffer)
+        self._instrument.write("IN_PV_4 \r \n".encode('ascii'))
         sleep(0.3)
-        speed = float(ser.readline().decode('ascii').split(" ")[0])
+        speed = float(self._instrument.readline().decode('ascii').split(" ")[0])
         return speed
 
     def set_SP_speed(self, value=0):
@@ -104,7 +106,7 @@ class Ika(SerialInstrument):
         Return (dict): Status of command.
         """
         try:
-            self._ser.write("OUT_SP_4 {:.2f} \r \n".format(value).encode('ascii'))
+            self._instrument.write("OUT_SP_4 {:.2f} \r \n".format(value).encode('ascii'))
         except:
             response = {"socket response": "ok", "description": "sent set speed command"}
         return response
@@ -131,5 +133,5 @@ if __name__ == "__main__":
         default="/dev/ttyUSB0"
     )
     args = parser.parse_args()
-    instrument = IKA(args.instrument_port, args.socket_ip, args.socket_port)
+    instrument = Ika(args.instrument_port, args.socket_ip, args.socket_port)
     instrument.run()

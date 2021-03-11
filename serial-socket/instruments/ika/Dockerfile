@@ -3,7 +3,7 @@ FROM python:3.7-alpine3.11
 
 RUN addgroup -S -g 1001 instrument\
     && adduser -S -h /home/instrument -s /bin/sh -u 1001 -g 1001 instrument\
-    && pip install PyYAML coloredlogs\
+    && pip install pyserial PyYAML coloredlogs\
     && sed -i -e /dialout/s/$/,instrument/ /etc/group
 
 USER instrument
