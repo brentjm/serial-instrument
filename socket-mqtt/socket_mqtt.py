@@ -26,7 +26,7 @@ def get_environment_variables():
     Returns JSON object of environment variables and values
     """
     return {
-        "socket_host": os.getenv("SOCKET_HOST_SERVICE"),
+        "socket_host": os.getenv("SOCKET_HOST"),
         "socket_port": int(os.getenv("SOCKET_PORT")),
         "mqtt_broker": os.getenv("MQTT_BROKER"),
         "client_id": os.getenv("CLIENT_ID")
