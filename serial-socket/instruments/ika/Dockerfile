@@ -11,5 +11,6 @@ RUN mkdir -p /home/instrument/python/serial-socket
 COPY --chown=instrument:instrument ./serial-socket/ /home/instrument/python/serial-socket
 WORKDIR /home/instrument/python/serial-socket/instruments
 
+ARG HOST
 #CMD ["/bin/sh", "-c", "sleep 1000000000"]
-ENTRYPOINT ["python", "-m", "ika.ika", "--instrument_port", "/dev/ttyUSB0", "--socket_ip", "0.0.0.0", "--socket_port", "54132"]
+ENTRYPOINT ["python", "-m", "ika.ika", "--instrument_port", "/dev/ttyUSB0", "--socket_ip", "0.0.0.0", "--socket_port", "54132", "--host", $HOST]

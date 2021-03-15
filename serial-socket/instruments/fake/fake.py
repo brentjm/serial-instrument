@@ -3,7 +3,6 @@
 """
 Simulates a fake serial instrument for testing the software stack.
 """
-import os
 import logging
 import argparse
 import random
@@ -22,13 +21,32 @@ class FakeInstrument(SerialInstrument):
            _update_data
     """
 
-    def __init__(self, instrument_port, socket_ip, socket_port):
-        super().__init__(instrument_port, socket_ip, socket_port)
-        self._status = "off"
-        self._SP1 = 0
-        self._SP2 = 0
-        self._PV1 = 0
-        self._PV2 = 0
+    def __init__(self, instrument_port, socket_ip, socket_port, host):
+        super(FakeInstrument, self).__init__(instrument_port, socket_ip, socket_port, host)
+        # Inhereted attribute
+        self._device_information = {
+            "instrument": "fake",
+            "description": "Fake instrument for code testing.",
+            "parameters": "SP_SP1, SP_SP2, PV_PV1, PV_PV2",
+            "instrument commands": "set_SP_SP1(value=<float>), set_SP_SP2(value=<float>)"
+        }
+        # Inhereted attribute
+        self._data = {
+            "status": "off",
+            "SP1": 0,
+            "SP2": 0,
+            "PV1": 0,
+            "PV2": 0
+        }
+        # Attributes specific to this "fake" instrument to make
+        # like a real instrument.
+        self._instrument_parameters = {
+            "status": "off",
+            "SP1": 0,
+            "SP2": 0,
+            "PV1": 0,
+            "PV2": 0
+        }
 
     def _connect_instrument(self, port):
         """Create a fake serial connection.
@@ -39,8 +57,11 @@ class FakeInstrument(SerialInstrument):
         connection = None
         try:
             connection = {
+                "port": port,
                 "bauderate": 9600,
-                "port": port
+                "bytesize": 8,
+                "parity": "N",
+                "stopbits": "1"
             }
         except:
             self._logger.error(
@@ -50,71 +71,48 @@ class FakeInstrument(SerialInstrument):
             self._logger.info("Connected to instrument on port {}".format(port))
         return connection
 
-    def _set_about(self):
-        """Setting attributes about the host microcomputer
-        and connected instrument.
-        """
-        self._about = {
-            "host": os.getenv("HOST"),
-            "instrument": "fake",
-            "descriptions": "fake serial instrument for testing"
-        }
-        self._logger.debug("about: {}".format(self._about))
-
     def _update_data(self):
         """Update the values (PV) of the fake instrument.
 
         Returns dictionary of data
         """
         data = {}
-        data["status"] = self._status
         data["user"] = self._user
         data["user_tag"] = self._user_tag
-        data["SP1"] = self._SP1
-        data["SP2"] = self._SP2
-        if self._status is "on":
-            data["PV1"] = self._SP1 + random.random()
-            data["PV2"] = self._SP2 + random.random()
+        data["status"] = self._instrument_parameters["status"]
+        data["SP1"] = self._instrument_parameters["SP1"]
+        data["SP2"] = self._instrument_parameters["SP2"]
+        if self._instrument_parameters["status"] is "on":
+            data["PV1"] = self._instrument_parameters["SP1"] + random.random()
+            data["PV2"] = self._instrument_parameters["SP2"] + random.random()
         else:
-            data["PV1"] = None
-            data["PV2"] = None
+            data["PV1"] = 0
+            data["PV2"] = 0
         return data
 
-    def set_SP1(self, value=0):
+    def set_SP_SP1(self, value=0):
         """Set the value of the set point 1 (SP1).
 
         value (float): value of set point 1.
-
-        Return (dict): Status of command.
         """
-        self._SP1 = value
-        response = {"socket response": "ok", "description": "successful set SP1"}
-        return response
+        self._instrument_parameters["SP1"] = value
 
-    def set_SP2(self, value=0):
+    def set_SP_SP2(self, value=0):
         """Set the value of the set point 2 (SP2).
 
         value (float): value of set point 2.
-
-        Return (dict): Status of command.
         """
-        self._SP2 = value
-        response = {"socket response": "ok", "description": "successful set SP2"}
-        return response
+        self._instrument_parameters["SP2"] = value
 
     def start(self):
         """Start the fake instrument.
         """
-        self._status = "on"
-        response = {"socket response": "ok", "description": "successful start"}
-        return response
+        self._instrument_parameters["status"] = "on"
 
     def stop(self):
         """Stop the fake instrument.
         """
-        self._status = "off"
-        response = {"socket response": "ok", "description": "successful stop"}
-        return response
+        self._instrument_parameters["status"] = "off"
 
 
 if __name__ == "__main__":
@@ -137,6 +135,12 @@ if __name__ == "__main__":
         type=str,
         default="/dev/ttyUSB0"
     )
+    parser.add_argument(
+        "--host",
+        help="host name",
+        type=str,
+        default="ape-0"
+    )
     args = parser.parse_args()
-    fake_instrument = FakeInstrument(args.instrument_port, args.socket_ip, args.socket_port)
+    fake_instrument = FakeInstrument(args.instrument_port, args.socket_ip, args.socket_port, args.host)
     fake_instrument.run()

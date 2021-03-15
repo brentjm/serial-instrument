@@ -29,10 +29,9 @@ class SerialInstrument(object):
            that this method is over-ridden for each inheriting class for specific
            instruments.
         3. A first thread is started that reads the serial instrument values
-           at regular intervals (self._call_updates) and stores the data in
-           the class attribute (self._data). The self._call_updates method calls
-           self._update_data, which must be over-ridden in inhereting classes
-           for specific instruments..
+           at regular intervals (self._call_updates) and stores the data in the
+           class attribute (self._data). The self._update_data must be
+           over-ridden in inhereting classes for specific instruments.
         4. A second thread is started that executes queued commands sent from
            connected clients (self._execute_queue).
         5  The main thread process incoming socket client messages/commands
@@ -56,24 +55,44 @@ class SerialInstrument(object):
                  (self._que_request) and executed by a separate thread. The server
                  responds immediately after succesful queueing, so it is up to
                  the client to check back and confirm that the command executed.
-                 Note that commands are executed as below and thus the called methods
+                 Note that commands are executed as below and thus the "commands"
                  must use keyword arguments.
                  getattr(instrument_object, command)(**params)
+                 e.g.
+                 command: {
+                    "command_name": <instrument_command>,
+                    "parameters": {"param1": <value>, "param2": <value>, ...}
+                }
+            d.  The avilable commands (login, logout, get_data, get_about), will
+                write to the instance variable self._resonse with the required
+                results as a JSON object, which will always contain the key
+                "instrument_status" with either "ok" or "error: [error description]".
     """
 
-    def __init__(self, instrument_port, socket_ip, socket_port):
+    def __init__(self, instrument_port, socket_ip, socket_port, host):
         """Start the logger, connect to the instrument (serial), start listening
         on a socket, and initialize the instrument data to None.
+
+        Arguments
+        instrument_port (str): device file for the instrument
+            (e.g. "/dev/ttyUSB0")
+        socket_ip (str): interface to bind socket (e.g. "0.0.0.0")
+        socket_port (int): port number to use for socket
+        host (str): name of host (e.g. ape-0)
         """
-        self._setup_logger()
-        self._user = None
-        self._password = None
-        self._set_about()
-        self._data = {}
+        # _device_information is set in the inheriting class.
+        self._response = {}
+        self._user = ""
+        self._password = ""
         self._user_tag = "untagged"
+        # The following three variables are updated by inheretting class
+        self._device_information = {}
+        self._host = host
+        self._instrument_status = "ok"
+        self._data = {}
+        self._setup_logger()
         self._instrument = self._connect_instrument(instrument_port)
         self._queue = queue.Queue()
-        self._response = None
         self._thread_lock = threading.Lock()
         self._update_thread = threading.Thread(target=self._call_updates, daemon=True)
         self._execute_thread = threading.Thread(target=self._execute_queue, daemon=True)
@@ -135,59 +154,135 @@ class SerialInstrument(object):
         """
         pass
 
-    def _set_about(self):
-        """Set some class attributes that define what the name of the
-        microcomputer this is running and what type of instrument the
-        microcomputer is connected. This method should be over-ridden
-        to set data from each instrument connection.
-        # TODO: get the HOST env in separate function.
-        """
-        self._about = {
-                "host": os.getenv("HOST")
-        }
-        self._logger.debug("about: {}".format(self._about))
-
     def _get_about(self):
         """Get information about the microcomputer and attached instrument.
+        Defines the self._response that the socket will write when avaialable.
         """
-        self._response = {
-            "socket response": "ok",
-            "value": self._about
-        }
+        self._response = self._device_information
+        self._response.update({"host": self._host})
+        self._response["instrument_status"] = self._instrument_status
+        self._logger.debug("retrieved about")
 
-    def _parse_request(self, request):
-        """Parse the request to get the command name and parameters. If
-        the parse fails set request to None. Set the self._response attribute
-        according to parse results.
+    def _login(self, user_name, password):
+        """Set the class attributes _user and _password with the passed
+        arguments, to "login" the user. Set the self._response attribute.
 
         Arguments:
-        request (dict): Instrument request
-
-        Returns a dictionary if parsed:
-            {"command_name": command_name, "parameters": parameters},
-            else returns None.
+        user_name (str): Username for currently logged in user.
+        password (str): Password of currently logged in user.
         """
-        if ("user" not in request or "password" not in request
-           or "command" not in request):
-            self._logger.error("request does not contain required keys")
-            self._logger.debug("request:\n{}".format(request))
-            self._response = {
-                "socket response": "error",
-                "descripton": "invalid request format"
-            }
-            request = None
-        elif "command_name" not in request["command"]:
-            self._logger.error("request does not contain required keys")
-            self._response = {
-                "socket response": "error",
-                "descripton": "invalid request format"
-            }
-            self._logger.debug("request:\n{}".format(request))
-            request = None
+        self._user = user_name
+        self._password = password
+        self._response["instrument_status"] = self._instrument_status
+        self._logger.debug("logged in user".format(self._user))
+
+    def _logout(self):
+        """Set the class attributes _user and _password to None to
+        "logout" the user. Set the self._response attribute.
+        """
+        self._user = None
+        self._password = None
+        self._response["instrument_status"] = self._instrument_status
+        self._logger.debug("logged out user {}".format(self._user))
+
+    def _set_user_tag(self, tag):
+        """
+        "Provide a method to set some tag provided by the user.
+        For example, the current experiment name, run #, ...etc
+
+        Arguments
+        tag (str): User tag that is transmitted with data.
+        """
+        self._user_tag = tag
+        self._response["instrument_status"] = self._instrument_status
+        self._logger.debug("set user tag{}".format(tag))
+
+    def _get_data(self, parameters=None):
+        """Get the instrument data. If parameters are provided, respond
+        with the desired parameters, else respond with all the data. Set the
+        self._response attribute.
+
+        Arguments:
+        parameteters (str|list): Key or keys for the data dictionary to return
+        """
+        if parameters is None:
+            self._response = self._data
         else:
-            self._logger.debug("request contained necessary keys")
-            self._logger.debug(request)
-        return request
+            if type(parameters) is str:
+                parameters = [parameters]
+            try:
+                self._response = {k: self._data[parameters[k]] for k in parameters}
+            except KeyError:
+                self._logger.error("request for invalid data parameters: {}".format(parameters))
+        self._response["user"] = self._user
+        self._response["user_tag"] = self._user_tag
+        self._response["instrument_status"] = self._instrument_status
+        self._logger.debug("retrieved data")
+
+    def _update_data(self):
+        """Update all the current instrument data values (self._data).  This
+        method needs to overloaded per instrument command set.
+        """
+        pass
+
+    def _call_updates(self, interval=10):
+        """Call the overloaded instrument specific function to update
+        the instrument data at intervals.
+
+        Arguments
+        interval (int): Time between updating the instrument data.
+        """
+        self._logger.info("update data thread started")
+        while True:
+            with self._thread_lock:
+                self._data = self._update_data()
+            self._logger.debug("updated data")
+            sleep(interval)
+
+    def _execute_queue(self):
+        """Execute commands in the que at a timing intervals sufficiently
+        slow to avoid serial errors. The inheretting class methods/commands
+        are called using (getattr(self, command)(**parameters).
+        """
+        self._logger.info("queue execution thread started")
+        while True:
+            request = self._queue.get()
+            self._logger.debug("getting request from que: {}".format(request))
+            command = request["command_name"]
+            parameters = request["parameters"]
+            if parameters is None:
+                try:
+                    with self._thread_lock:
+                        getattr(self, command)()
+                        self._logger.info("executed command: {}".format(command))
+                        # Sleep for a short time to avoid buffer conflict
+                        sleep(0.5)
+                except Exception:
+                    self._logger.error("command failed: {}".format(command))
+            else:
+                try:
+                    with self._thread_lock:
+                        getattr(self, command)(**parameters)
+                        # Sleep for a short time to avoid buffer conflict
+                        sleep(0.5)
+                except Exception:
+                    self._logger.error("command failed {}({})".format(command, **parameters))
+            sleep(1)
+
+    def _que_request(self, request):
+        """Queue the request to be executed at reasonable time intervals by
+        another thread.
+
+        Arguments:
+        request (dict): Request containing command and parameters to be executed
+            on serial conneted device.
+        """
+        self._queue.put(request)
+        self._response = {
+            "socket status": "okay",
+            "description": "command queued for execution"
+        }
+        self._logger.debug("command {} queued".format(request["command_name"]))
 
     def _validate_credentials(self, request):
         """Confirm that the request contains the logged in usernme with
@@ -211,98 +306,10 @@ class SerialInstrument(object):
             self._logger.error("request with invalid credentials")
             valid = False
             self._response = {
-                "socket response": "error",
+                "socket status": "error",
                 "description": "invalid user name or password"
             }
         return valid
-
-    def _login(self, user_name, password):
-        """Set the class attributes _user and _password with the passed
-        arguments, to "login" the user. Set the self._response attribute.
-
-        Arguments:
-        user_name (str): Username for currently logged in user.
-        password (str): Password of currently logged in user.
-        """
-        self._user = user_name
-        self._password = password
-        self._logger.info("logged in user {}".format(self._user))
-        self._response = {
-            "socket response": "ok",
-            "description": "logged in user {}".format(self._user)
-        }
-
-    def _logout(self):
-        """Set the class attributes _user and _password to None to
-        "logout" the user. Set the self._response attribute.
-        """
-        self._logger.info("logging out user {}".format(self._user))
-        self._response = {
-            "socket response": "ok",
-            "description": "logging out user {}".format(self._user)
-        }
-        self._user = None
-        self._password = None
-
-    def _set_user_tag(self, tag):
-        """
-        "Provide a method to set some tag provided by the user.
-        For example, the current experiment name, run #, ...etc
-
-        Arguments
-        tag (str): User tag that is transmitted with data.
-        """
-        self._logger.info("setting user tag{}".format(tag))
-        self._response = {
-            "socket response": "ok",
-            "description": "setting user tag {}".format(tag)
-        }
-        self._user_tag = tag
-
-    def _get_data(self, parameters=None):
-        """Get the instrument data. If parameters are provided, respond
-        with the desired parameters, else respond with all the data. Set the
-        self._response attribute.
-
-        Arguments:
-        parameteters (str|list): Key or keys for the data dictionary to return
-
-        Returns a dictionary of the instruement data {parameter: parameter_value}
-        """
-        if parameters is None:
-            self._response = self._data
-            self._response["socket response"] = "ok"
-        else:
-            if type(parameters) is str:
-                parameters = [parameters]
-            try:
-                self._response = {k: self._data[parameters[k]] for k in parameters}
-                self._response["socket response"] = "ok"
-            except KeyError:
-                self._response = {
-                    "socket response": "error",
-                    "description": "invalid data key(s): {}".format(parameters)
-                }
-
-    def _call_updates(self, interval=10):
-        """Call the overloaded instrument specific function to update
-        the instrument data at intervals.
-
-        Arguments
-        interval (int): Time between updating the instrument data.
-        """
-        self._logger.info("update data thread started")
-        while True:
-            with self._thread_lock:
-                self._data = self._update_data()
-            self._logger.debug("updated data")
-            sleep(interval)
-
-    def _update_data(self):
-        """Update all the current instrument data values (self._data).  This
-        method needs to overloaded per instrument command set.
-        """
-        pass
 
     def _process_request(self, request):
         """If the request does not require instrument communication (e.g.
@@ -341,54 +348,43 @@ class SerialInstrument(object):
                 # If no command was found set response and return.
                 self._logger.info("invalid command called: {}".format(request["command_name"]))
                 self._response = {
-                    "socket response": "error",
+                    "socket status": "error",
                     "descripton": "command '{}' not found".format(request["command_name"])
                 }
 
-    def _que_request(self, request):
-        """Queue the request to be executed at reasonable time intervals by
-        another thread.
+    def _parse_request(self, request):
+        """Parse the request to get the command name and parameters. If
+        the parse fails set request to None. Set the self._response attribute
+        according to parse results.
 
         Arguments:
-        request (dict): Request containing command and parameters to be executed
-            on serial conneted device.
-        """
-        self._queue.put(request)
-        self._response = {
-            "socket response": "okay",
-            "description": "command queued for execution"
-        }
-        self._logger.debug("command {} queued".format(request["command_name"]))
+        request (dict): Instrument request
 
-    def _execute_queue(self):
-        """Execute commands in the que at a timing intervals sufficiently
-        slow to avoid serial errors. The inheretting class methods/commands
-        are called using (getattr(self, command)(**parameters).
+        Returns a dictionary if parsed:
+            {"command_name": command_name, "parameters": parameters},
+            else returns None.
         """
-        self._logger.info("queue execution thread started")
-        while True:
-            request = self._queue.get()
-            self._logger.debug("getting request from que: {}".format(request))
-            command = request["command_name"]
-            parameters = request["parameters"]
-            if parameters is None:
-                try:
-                    with self._thread_lock:
-                        getattr(self, command)()
-                        self._logger.info("executed command: {}".format(command))
-                        # Sleep for a short time to avoid buffer conflict
-                        sleep(0.5)
-                except Exception:
-                    self._logger.error("command failed: {}".format(command))
-            else:
-                try:
-                    with self._thread_lock:
-                        getattr(self, command)(**parameters)
-                        # Sleep for a short time to avoid buffer conflict
-                        sleep(0.5)
-                except Exception:
-                    self._logger.error("command failed {}({})".format(command, **parameters))
-            sleep(1)
+        if ("user" not in request or "password" not in request
+           or "command" not in request):
+            self._logger.error("request does not contain required keys")
+            self._logger.debug("request:\n{}".format(request))
+            self._response = {
+                "socket status": "error",
+                "descripton": "invalid request format"
+            }
+            request = None
+        elif "command_name" not in request["command"]:
+            self._logger.error("request does not contain required keys")
+            self._response = {
+                "socket status": "error",
+                "descripton": "invalid request format"
+            }
+            self._logger.debug("request:\n{}".format(request))
+            request = None
+        else:
+            self._logger.debug("request contained necessary keys")
+            self._logger.debug(request)
+        return request
 
     def _load_json(self, message):
         """Try to interpret the message as JSON.
@@ -406,7 +402,7 @@ class SerialInstrument(object):
             self._logger.error("message not valid JSON")
             self._logger.error("message: {}".format(message))
             self._response = {
-                "socket response": "error",
+                "socket status": "error",
                 "description": "request type not valid JSON"
             }
             self._logger.debug("request:\n{}".format(request))
@@ -512,6 +508,12 @@ if __name__ == "__main__":
         type=str,
         default="/dev/ttyUSB0"
     )
+    parser.add_argument(
+        "--host",
+        help="host name",
+        type=str,
+        default="ape-0"
+    )
     args = parser.parse_args()
-    instrument_server = SerialInstrument(args.instrument_port, args.socket_ip, args.socket_port)
-    instrument_server.run()
+    instrument = SerialInstrument(args.instrument_port, args.socket_ip,
+        args.socket_port, args.host)

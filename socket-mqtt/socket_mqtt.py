@@ -54,10 +54,11 @@ class SocketMqtt(object):
         mqtt_broker (str): Namre or address of the MQTT broker.
         client_id (str): MQTT client id.
         """
-        self._setup_logger()
         self._client_id = client_id
+        self._device_data = None
+        self._setup_logger()
         self._sock = self._connect_socket(socket_host, socket_port)
-        self._mqttc = self._connect_mqtt(mqtt_broker, client_id)
+        self._mqttc = self._setup_mqtt(mqtt_broker, client_id)
         self._logger.info("Instrument initiated")
 
     def _setup_logger(self):
@@ -93,27 +94,33 @@ class SocketMqtt(object):
                     "Connected to socket host: {}, port: {}".format(host, port))
         return sock
 
-    def _connect_mqtt(self, mqtt_broker, client_id):
-        """Connect to the MQTT broker.
+    def _setup_mqtt(self, mqtt_broker, client_id):
+        """Connect to the MQTT broker and subscribe to the
+        device_id command topic.
 
         Arguments
         mqtt_broker (str): Server name or IP address of MQTT broker.
         client_id (str): MQTT client id (e.g. ape-5)
+
+        Return the mqtt instance
         """
         self._logger.debug("attempting to connect to MQTT: {}".format(mqtt_broker))
         try:
             mqttc = mqtt.Client(client_id=client_id)
-            mqttc.on_connect = self._create_on_connect()
-            mqttc.on_message = self._create_on_message()
+            mqttc.on_connect = self.create_mqtt_on_connect()
+            mqttc.on_message = self._create_mqtt_on_message()
             mqttc.connect(mqtt_broker, 1883, 10)
         except Exception as err:
             self._logger.error("Could not connect to MQTT broker")
             raise err
         else:
             self._logger.info("Connected to MQTT broker: {}".format(mqtt_broker))
+            subscribe_topic = "{}/command".format(self._client_id)
+            mqttc.subscribe(subscribe_topic)
+            self._logger.debug("set subscribe topic: {}".format(subscribe_topic))
         return mqttc
 
-    def _create_on_connect(self):
+    def create_mqtt_on_connect(self):
         """Create a function for the MQTT on_connect callback.
 
         Return function
@@ -127,13 +134,13 @@ class SocketMqtt(object):
                         "parameters": None
                     }
             }
-            about = self._send_message(message)
+            about = self._send_socket_message(message)
             self._logger.debug("on_connect callback publish about")
             self._mqttc.publish("{}/about".format(self._client_id),
                 payload=json.dumps(about), qos=0, retain=True)
         return on_connect
 
-    def _create_on_message(self):
+    def _create_mqtt_on_message(self):
         """Create a function for the MQTT on_message callback. The on_message callback
         sends the message to the instrument socket.
 
@@ -142,10 +149,10 @@ class SocketMqtt(object):
         def on_message(client, userdata, message):
             payload = json.loads(message.payload.decode('ascii'))
             self._logger.debug("received message:\n{}".format(payload))
-            status = self._send_message(payload)
+            status = self._send_socket_message(payload)
         return on_message
 
-    def _send_message(self, message):
+    def _send_socket_message(self, message):
         """Send a message to the host socket.
 
         Arguments:
@@ -170,17 +177,11 @@ class SocketMqtt(object):
                 self._logger.debug("received message from socket:\n{}".format(received))
         return received
 
-    def run(self):
-        """Start the MQTT service loop; send the instrument startup information,
-        then start infinite loop sending instrument data.
+    def _get_device_data(self):
+        """Get the instrument data.
+
+        Returns JSON of device data
         """
-        subscribe_topic = "{}/command".format(self._client_id)
-        self._mqttc.subscribe(subscribe_topic)
-        self._logger.debug("set subscribe topic: {}".format(subscribe_topic))
-        publish_topic = "{}/data".format(self._client_id)
-        self._logger.debug("set publish topic: {}".format(publish_topic))
-        self._logger.info("Starting MQTT Loop")
-        self._mqttc.loop_start()
         message = {
             "user": None,
             "password": None,
@@ -189,11 +190,32 @@ class SocketMqtt(object):
                 "parameters": None
             }
         }
+        data = self._send_socket_message(message)
+        return data
+
+    def _publish_mqtt_message(self, topic, message):
+        """Format and publish the MQTT message.
+
+        Arguments:
+        topic (str): Unformatted topic to publish to.
+        message (JSON): Unformatted message to be published
+        """
+        publish_topic = topic
+        #publish_topic = "{}/data".format(self._client_id)
+        #self._logger.debug("set publish topic: {}".format(publish_topic))
+        #self._logger.debug("publish\n{}".format(data))
+        self._mqttc.publish(publish_topic, payload=json.dumps(message))
+
+    def run(self):
+        """Start the MQTT service loop; send the instrument startup information,
+        then start infinite loop sending instrument data.
+        """
+        self._logger.info("Starting MQTT Loop")
+        self._mqttc.loop_start()
         while True:
-            # get data
-            data = self._send_message(message)
-            self._logger.debug("publish\n{}".format(data))
-            self._mqttc.publish(publish_topic, payload=json.dumps(data))
+            # get instrument data
+            data = self._get_device_data()
+            self._publish_mqtt_message("data", data)
             sleep(5)
 
 

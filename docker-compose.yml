@@ -27,21 +27,36 @@ services:
 #    devices:
 #      - "/dev/ttyUSB0:/dev/ttyUSB0"
 #    restart: unless-stopped
-  ika:
+#  ika:
+#    build:
+#      context: .
+#      dockerfile: ./serial-socket/instruments/ika/Dockerfile
+#    image: ika
+#    container_name: ika
+#    networks:
+#      - equipment
+#    ports:
+#      - "${SOCKET_PORT}:${SOCKET_PORT}"
+#    devices:
+#      - "${SERIAL_PORT}:/dev/ttyUSB0"
+#    restart: unless-stopped
+#    env_file:
+#      - service-variables.env
+  instrument:
     build:
       context: .
-      dockerfile: ./serial-socket/instruments/ika/Dockerfile
-    image: ika
-    container_name: ika
+      dockerfile: ./serial-socket/instruments/${SOCKET_HOST}/Dockerfile
+    image: ${SOCKET_HOST}
+    container_name: ${SOCKET_HOST}
     networks:
       - equipment
     ports:
-      - "54132:54132"
-    devices:
-      - "/dev/ttyUSB0:/dev/ttyUSB0"
+      - "${SOCKET_PORT}:${SOCKET_PORT}"
+        #    devices:
+        #      - "${SERIAL_PORT}:/dev/ttyUSB0"
     restart: unless-stopped
     env_file:
-      - service-variables.env
+      - .env
 #  fake:
 #    build:
 #      context: .
@@ -71,12 +86,12 @@ services:
     image: socket-mqtt
     container_name: socket-mqtt
     env_file:
-      - service-variables.env
+      - .env
     networks:
       - equipment
     restart: unless-stopped
     depends_on:
-      - ika
+      - instrument
 
 
 networks:
