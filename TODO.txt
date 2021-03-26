@@ -1,1 +1,0 @@
-encode('asii') vs encode("utf-8")

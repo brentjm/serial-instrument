@@ -1,51 +1,10 @@
 version: '3.5'
 
 services:
-#  bronkhorst:
-#    build:
-#      context: .
-#      dockerfile: ./serial-socket/instruments/bronkhorst/Dockerfile
-#    image: bronkhorst
-#    container_name: bronkhorst
-#    networks:
-#      - equipment
-#    ports:
-#      - "54132:54132"
-#    devices:
-#      - "/dev/ttyUSB0:/dev/ttyUSB0"
-#    restart: unless-stopped
-#  mettlertoledo:
-#    build:
-#      context: .
-#      dockerfile: ./serial-socket/instruments/mettlertoledo_PG5002S/Dockerfile
-#    image: mettlertoledo_pg5002s
-#    container_name: mettlertoledo_pg5002s
-#    networks:
-#      - equipment
-#    ports:
-#      - "54132:54132"
-#    devices:
-#      - "/dev/ttyUSB0:/dev/ttyUSB0"
-#    restart: unless-stopped
-#  ika:
-#    build:
-#      context: .
-#      dockerfile: ./serial-socket/instruments/ika/Dockerfile
-#    image: ika
-#    container_name: ika
-#    networks:
-#      - equipment
-#    ports:
-#      - "${SOCKET_PORT}:${SOCKET_PORT}"
-#    devices:
-#      - "${SERIAL_PORT}:/dev/ttyUSB0"
-#    restart: unless-stopped
-#    env_file:
-#      - service-variables.env
   instrument:
     build:
-      context: .
-      dockerfile: ./serial-socket/instruments/${SOCKET_HOST}/Dockerfile
+      context: ./serial-socket
+      dockerfile: instruments/${SOCKET_HOST}/Dockerfile
     image: ${SOCKET_HOST}
     container_name: ${SOCKET_HOST}
     networks:
@@ -57,32 +16,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-#  fake:
-#    build:
-#      context: .
-#      dockerfile: ./serial-socket/instruments/fake/Dockerfile
-#    image: fake
-#    container_name: fake
-#    networks:
-#      - equipment
-#    restart: unless-stopped
-#    env_file:
-#      - service-variables.env
-#  test-client:
-#    build:
-#      context: .
-#      dockerfile: ./serial-socket/test-client/Dockerfile
-#    image: test-client
-#    container_name: test-client
-#    networks:
-#      - equipment
-#    restart: "no"
-#    depends_on:
-#      - fake
   socket-mqtt:
     build:
       context: ./socket-mqtt
-      #dockerfile: ./socket-mqtt/Dockerfile
+      dockerfile: Dockerfile
     image: socket-mqtt
     container_name: socket-mqtt
     env_file:
