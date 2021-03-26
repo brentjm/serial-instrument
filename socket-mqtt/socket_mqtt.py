@@ -46,14 +46,18 @@ class SocketMqtt(object):
         self._mqttc = self._setup_mqtt(mqtt_broker, client_id)
         self._logger.info("Instrument initiated")
 
-    def _setup_logger(self):
-        """Start the logger.
+    def _setup_logger(self, config_file="./logger_conf.yml"):
+        """Start the logger using the provided configuration file.
         """
+        try:
+            with open(config_file, 'rt') as file_obj:
+                config = yaml.safe_load(file_obj.read())
+                logging.config.dictConfig(config)
+                #coloredlogs.install(level='DEBUG')
+                coloredlogs.install()
+        except Exception as e:
+            print(e)
         self._logger = logging.getLogger("socket_mqtt_logger")
-        self._logger.setLevel(logging.DEBUG)
-        handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
-        self._logger.addHandler(handler)
         self._logger.info("socket-mqtt logger setup")
 
     def _connect_socket(self, host, port):

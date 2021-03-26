@@ -19,7 +19,7 @@ handlers:
         class: logging.handlers.RotatingFileHandler
         level: INFO
         formatter: standard
-        filename: /tmp/instrument.log
+        filename: /tmp/mqtt.log
         maxBytes: 10000000
         backupCount: 5
         encoding: utf8
@@ -30,6 +30,6 @@ root:
 
 loggers:
     instrument_logger:
-        level: DEBUG
+        level: INFO
         handlers: [console, info_file_handler]
         propogate: no

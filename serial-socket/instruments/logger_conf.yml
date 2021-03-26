@@ -11,7 +11,7 @@ formatters:
 handlers:
     console:
         class: logging.StreamHandler
-        level: INFO
+        level: DEBUG
         formatter: colored
         stream: ext://sys.stdout
 
@@ -24,12 +24,13 @@ handlers:
         backupCount: 5
         encoding: utf8
 
-root:
-    level: WARN
-    handlers: [console]
-
 loggers:
     instrument_logger:
         level: INFO
         handlers: [console, info_file_handler]
         propogate: no
+
+root:
+    level: WARN
+    handlers: [console]
+

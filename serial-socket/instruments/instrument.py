@@ -3,7 +3,6 @@
 """
 Module to provide abstract base class for creating a serial instrument.
 """
-import os
 import threading
 import queue
 import socket
