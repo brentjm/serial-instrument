@@ -12,4 +12,4 @@ COPY --chown=instrument:instrument instruments /home/instrument/python/serial-so
 WORKDIR /home/instrument/python/serial-socket
 
 ENTRYPOINT ["python", "-m", "fake.fake"]
-CMD ["--instrument_port", "/dev/ttyUSB0", "--socket_ip", "0.0.0.0", "--socket_port", "54132"]
+CMD ["--instrument_port", "/dev/ttyUSB0", "--socket_ip", "0.0.0.0", "--socket_port", "54132", "--host", "ape-0"]

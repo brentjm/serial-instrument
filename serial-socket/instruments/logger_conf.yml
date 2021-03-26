@@ -11,7 +11,7 @@ formatters:
 handlers:
     console:
         class: logging.StreamHandler
-        level: DEBUG
+        level: INFO
         formatter: colored
         stream: ext://sys.stdout
 
@@ -26,7 +26,7 @@ handlers:
 
 loggers:
     instrument_logger:
-        level: INFO
+        level: DEBUG
         handlers: [console, info_file_handler]
         propogate: no
 

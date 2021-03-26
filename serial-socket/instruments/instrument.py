@@ -105,7 +105,7 @@ class SerialInstrument(object):
             with open(config_file, 'rt') as file_obj:
                 config = yaml.safe_load(file_obj.read())
                 logging.config.dictConfig(config)
-                coloredlogs.install(level='DEBUG')
+                coloredlogs.install()
         except Exception as e:
             print(e)
         self._logger = logging.getLogger("instrument_logger")

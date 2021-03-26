@@ -12,7 +12,6 @@ import yaml
 import coloredlogs
 import paho.mqtt.client as mqtt
 from time import sleep
-from pdb import set_trace
 
 __author__ = "Brent Maranzano"
 __license__ = "MIT"
@@ -27,7 +26,7 @@ class SocketMqtt(object):
     """
 
     def __init__(self, socket_host="", socket_port=54132,
-                 mqtt_broker="", client_id="ape#"):
+                 mqtt_broker="", group_id="proto", device_id="default"):
         """Start the logger, connect to a socket and mqtt broker. Start
         polling the socket for data and publishing on to MQTT.
 
@@ -37,12 +36,15 @@ class SocketMqtt(object):
         socket_port (int): Port number of the socket used to
             interact with instrument.
         mqtt_broker (str): Namre or address of the MQTT broker.
-        client_id (str): MQTT client id.
+        group_id (str): MQTT Sparkplug group id.
+        device_id (str): MQTT Sparkplug device id.
         """
-        self._client_id = client_id
+        self._group_id = group_id
+        self._device_id = device_id
         self._device_data = None
         self._setup_logger()
         self._sock = self._connect_socket(socket_host, socket_port)
+        client_id = group_id + device_id
         self._mqttc = self._setup_mqtt(mqtt_broker, client_id)
         self._logger.info("Instrument initiated")
 
@@ -53,7 +55,6 @@ class SocketMqtt(object):
             with open(config_file, 'rt') as file_obj:
                 config = yaml.safe_load(file_obj.read())
                 logging.config.dictConfig(config)
-                #coloredlogs.install(level='DEBUG')
                 coloredlogs.install()
         except Exception as e:
             print(e)
@@ -96,7 +97,7 @@ class SocketMqtt(object):
         self._logger.debug("attempting to connect to MQTT: {}".format(mqtt_broker))
         try:
             mqttc = mqtt.Client(client_id=client_id)
-            mqttc.on_connect = self.create_mqtt_on_connect()
+            mqttc.on_connect = self._create_mqtt_on_connect()
             mqttc.on_message = self._create_mqtt_on_message()
             mqttc.connect(mqtt_broker, 1883, 10)
         except Exception as err:
@@ -104,29 +105,25 @@ class SocketMqtt(object):
             raise err
         else:
             self._logger.info("Connected to MQTT broker: {}".format(mqtt_broker))
-            subscribe_topic = "{}/command".format(self._client_id)
+            about = self._get_device_about()
+            host = about["host"]
+            subscribe_topic = "+/+/DCMD/{}/+".format(host)
             mqttc.subscribe(subscribe_topic)
             self._logger.debug("set subscribe topic: {}".format(subscribe_topic))
         return mqttc
 
-    def create_mqtt_on_connect(self):
+    def _create_mqtt_on_connect(self):
         """Create a function for the MQTT on_connect callback.
+        Uses both self._group_id and self._device_id to create topic.
 
         Return function
         """
         def on_connect(client, userdata, flags, rc):
-            message = {
-                    "user": None,
-                    "password": None,
-                    "command": {
-                        "command_name": "get_about",
-                        "parameters": None
-                    }
-            }
-            about = self._send_socket_message(message)
+            about = self._get_device_about()
+            host = about["host"]
+            topic = "spBv1.0/{}/NBIRTH/{}/{}".format(self._group_id, host, self._device_id)
+            self._mqttc.publish(topic, payload=json.dumps(about), qos=1, retain=True)
             self._logger.debug("on_connect callback publish about")
-            self._mqttc.publish("{}/about".format(self._client_id),
-                payload=json.dumps(about), qos=0, retain=True)
         return on_connect
 
     def _create_mqtt_on_message(self):
@@ -180,20 +177,25 @@ class SocketMqtt(object):
             }
         }
         data = self._send_socket_message(message)
+        self._logger.debug("retrived device data: {}".format(data))
         return data
 
-    def _publish_mqtt_message(self, topic, message):
-        """Format and publish the MQTT message.
+    def _get_device_about(self):
+        """Get the device "about".
 
-        Arguments:
-        topic (str): Unformatted topic to publish to.
-        message (JSON): Unformatted message to be published
+        Returns JSON "about" instrument parameters
         """
-        publish_topic = topic
-        #publish_topic = "{}/data".format(self._client_id)
-        #self._logger.debug("set publish topic: {}".format(publish_topic))
-        #self._logger.debug("publish\n{}".format(data))
-        self._mqttc.publish(publish_topic, payload=json.dumps(message))
+        message = {
+                "user": None,
+                "password": None,
+                "command": {
+                    "command_name": "get_about",
+                    "parameters": None
+                }
+        }
+        about = self._send_socket_message(message)
+        self._logger.debug("retrived device about: {}".format(about))
+        return about
 
     def run(self):
         """Start the MQTT service loop; send the instrument startup information,
@@ -201,10 +203,16 @@ class SocketMqtt(object):
         """
         self._logger.info("Starting MQTT Loop")
         self._mqttc.loop_start()
+        # Create the publish topic outside loop
+        about = self._get_device_about()
+        host = about["host"]
+        topic = "spBv1.0/{}/DDATA/{}/{}".format(self._group_id, host, self._device_id)
+        # Wait to finsish request about device
+        sleep(2)
         while True:
             # get instrument data
             data = self._get_device_data()
-            self._publish_mqtt_message("data", data)
+            self._mqttc.publish(topic, payload=json.dumps(data), qos=0, retain=False)
             sleep(5)
 
 
@@ -229,12 +237,18 @@ if __name__ == "__main__":
         default="192.168.1.3"
     )
     parser.add_argument(
-        "--client_id",
-        help="MQTT client ID",
+        "--group_id",
+        help="MQTT Sparkplug group ID",
         type=str,
-        default="ape-0"
+        default="prototype"
+    )
+    parser.add_argument(
+        "--device_id",
+        help="MQTT Sparkplug device ID",
+        type=str,
+        default="fake"
     )
     args = parser.parse_args()
     socket_mqtt = SocketMqtt(args.socket_host, args.socket_port,
-                             args.mqtt_broker, args.client_id)
+                             args.mqtt_broker, args.group_id, args.device_id)
     socket_mqtt.run()
