@@ -3,7 +3,6 @@
 """
 Module to convert between from MQTT to socket and conversely.
 """
-import os
 import socket
 import argparse
 import logging
@@ -17,20 +16,6 @@ from pdb import set_trace
 
 __author__ = "Brent Maranzano"
 __license__ = "MIT"
-
-
-def get_environment_variables():
-    """Retrieve the environmental variables for server and
-    broker settings.
-
-    Returns JSON object of environment variables and values
-    """
-    return {
-        "socket_host": os.getenv("SOCKET_HOST"),
-        "socket_port": int(os.getenv("SOCKET_PORT")),
-        "mqtt_broker": os.getenv("MQTT_BROKER"),
-        "client_id": os.getenv("CLIENT_ID")
-    }
 
 
 class SocketMqtt(object):
@@ -246,11 +231,6 @@ if __name__ == "__main__":
         default="ape-0"
     )
     args = parser.parse_args()
-    if args.socket_host is not None:
-        socket_mqtt = SocketMqtt(args.socket_host, args.socket_port,
-            args.mqtt_broker, args.client_id)
-    else:
-        env = get_environment_variables()
-        socket_mqtt = SocketMqtt(env["socket_host"], env["socket_port"],
-            env["mqtt_broker"], env["client_id"])
+    socket_mqtt = SocketMqtt(args.socket_host, args.socket_port,
+                             args.mqtt_broker, args.client_id)
     socket_mqtt.run()

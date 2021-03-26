@@ -16,6 +16,7 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    command: ["--instrument_port", "${SERIAL_PORT}", "--socket_ip", "${SOCKET_HOST}", "--socket_port", "${SOCKET_PORT}"]
   socket-mqtt:
     build:
       context: ./socket-mqtt
@@ -24,6 +25,7 @@ services:
     container_name: socket-mqtt
     env_file:
       - .env
+    command: ["--socket_host", "${SOCKET_HOST}", "--socket_port", "${SOCKET_PORT}", "--mqtt_broker", "${MQTT_BROKER}", "--client_id", "${DEVICE_ID}"]
     networks:
       - equipment
     restart: unless-stopped
