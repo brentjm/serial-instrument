@@ -231,6 +231,8 @@ class SerialInstrument(object):
         Arguments
         interval (int): Time between updating the instrument data.
         """
+        # Minimum allowable interval is 2 seconds to avoid serial problems.
+        interval = min(interval, 2)
         self._logger.info("update data thread started")
         while True:
             with self._thread_lock:
@@ -470,9 +472,11 @@ class SerialInstrument(object):
         set the selector to write state.
         """
         if mask == selectors.EVENT_READ:
+            self._thread_lock.acquire(blocking=True)
             self._process_read_event(conn)
         elif mask == selectors.EVENT_WRITE:
             self._process_write_event(conn)
+            self._thread_lock.release()
 
     def run(self):
         """Run the socket server. Accept clients and service requests.
