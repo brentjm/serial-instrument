@@ -159,8 +159,12 @@ class SocketMqtt(object):
             except Exception as err:
                 self._logger.error("error receiving message from socket:\n{}".format(err))
             else:
-                received = json.loads(received.decode('ascii'))
-                self._logger.debug("received message from socket:\n{}".format(received))
+                try:
+                    received = json.loads(received.decode('ascii'))
+                    self._logger.debug("received message from socket:\n{}".format(received))
+                except Exception as err:
+                    self._logger.error("error decoding response: {}".format(
+                        received.decode('ascii')))
         return received
 
     def _get_device_data(self):
@@ -206,13 +210,17 @@ class SocketMqtt(object):
         # Create the publish topic outside loop
         about = self._get_device_about()
         host = about["host"]
-        topic = "spBv1.0/{}/DDATA/{}/{}".format(self._group_id, host, self._device_id)
+        topic = "spBv1.0/{}/DDATA/{}/{}".format(self._group_id, host,
+            self._device_id)
         # Wait to finsish request about device
         sleep(2)
         while True:
             # get instrument data
             data = self._get_device_data()
-            self._mqttc.publish(topic, payload=json.dumps(data), qos=0, retain=False)
+            self._logger.debug("publishing:\n topic: {}\n data: {}"
+                .format(topic, data))
+            self._mqttc.publish(topic, payload=json.dumps(data), qos=0,
+                retain=False)
             sleep(5)
 
 

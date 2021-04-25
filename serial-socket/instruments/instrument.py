@@ -216,7 +216,7 @@ class SerialInstrument(object):
         self._response["user"] = self._user
         self._response["user_tag"] = self._user_tag
         self._response["instrument_status"] = self._instrument_status
-        self._logger.debug("retrieved data")
+        self._logger.debug("retrieved data: {}".format(self._response))
 
     def _update_data(self):
         """Update all the current instrument data values (self._data).  This

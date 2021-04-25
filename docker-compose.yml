@@ -11,8 +11,8 @@ services:
       - equipment
     ports:
       - "${SOCKET_PORT}:${SOCKET_PORT}"
-        #    devices:
-        #      - "${SERIAL_PORT}:/dev/ttyUSB0"
+    devices:
+      - "${SERIAL_PORT}:/dev/ttyACM0"
     restart: unless-stopped
     env_file:
       - .env

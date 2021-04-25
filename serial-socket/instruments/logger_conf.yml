@@ -26,7 +26,7 @@ handlers:
 
 loggers:
     instrument_logger:
-        level: DEBUG
+        level: INFO
         handlers: [console, info_file_handler]
         propogate: no
 

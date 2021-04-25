@@ -11,4 +11,4 @@ COPY --chown=mosquitto:mosquitto socket_mqtt.py logger_conf.yml /home/mosquitto/
 WORKDIR /home/mosquitto/python/socket-mqtt
 
 ENTRYPOINT ["python", "-m", "socket_mqtt"]
-CMD ["--socket_host", "fake", "--socket_port", "54132", "--mqtt_broker", "192.168.1.3", "--group_id", "prototype", "--device_id", "fake"]
+#CMD ["--socket_host", "fake", "--socket_port", "54132", "--mqtt_broker", "192.168.1.3", "--group_id", "prototype", "--device_id", "fake"]
