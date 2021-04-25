@@ -51,7 +51,7 @@ For example,
 `
 HOST=computerName             # The name of the computer attached to the serial device.
 SERIAL_PORT="/dev/ttyUSB0"    # The port name of the device location (see udev rules).
-SOCKET_HOST=arduino           # The name of the service for the instrument type (e.g. Ika, Julabo, ...etc.).
+SOCKET_HOST=ika               # The name of the service for the instrument type (e.g. Ika, Julabo, ...etc.).
 SOCKET_PORT=54132             # The port number to bind the socket.
 MQTT_BROKER=192.168.1.3       # The IP address of the remote MQTT broker
 GROUP_ID=DPD                  # The group ID of the MQTT device (see MQTT Sparkplug specifications)
