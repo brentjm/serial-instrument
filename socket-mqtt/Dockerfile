@@ -1,8 +1,8 @@
-FROM python:3.7
-#FROM arm32v6/python:3.7
+#FROM python:3.7
+FROM arm32v6/python:3.7-alpine3.11
 
-RUN addgroup --system --gid 1001 mosquitto\
-    && adduser --system --home /home/mosquitto --shell /bin/sh --uid 1001 --gid 1001 mosquitto\
+RUN addgroup -S -g 1001 mosquitto\
+    && adduser -S -h /home/mosquitto -s /bin/sh -u 1001 -g 1001 mosquitto\
     && pip install paho-mqtt PyYAML coloredlogs
 
 USER mosquitto
