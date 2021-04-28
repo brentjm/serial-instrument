@@ -6,8 +6,6 @@ dynamic load cell (dlc).
 """
 import logging
 import argparse
-from numpy import var
-from scipy.stats import skew, kurtosis
 from serial import Serial
 from instrument import SerialInstrument
 
@@ -93,9 +91,13 @@ class Dlc(SerialInstrument):
         Arguments
         data (list): Time series data of pressure points.
         """
-        self._data["VAR"] = var(data)
-        self._data["SKEW"] = skew(data)
-        self._data["KURTOSIS"] = kurtosis(data)
+        mean = sum(data)/len(data)
+        self._data["VAR"] = sum([(d-mean)**2 for d in data])/len(data)
+        self._data["SKEW"] = sum([(d-mean)**3 for d in data])/len(data)
+        self._data["KURTOSIS"] = sum([(d-mean)**4 for d in data])/len(data)
+        #self._data["VAR"] = var(data)
+        #self._data["SKEW"] = skew(data)
+        #self._data["KURTOSIS"] = kurtosis(data)
 
 
 if __name__ == "__main__":

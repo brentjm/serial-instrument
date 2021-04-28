@@ -12,11 +12,11 @@ services:
     ports:
       - "${SOCKET_PORT}:${SOCKET_PORT}"
     devices:
-      - "${SERIAL_PORT}:/dev/ttyACM0"
+      - "/dev/ttyACM0:/dev/ttyACM0"
     restart: unless-stopped
     env_file:
       - .env
-    command: ["--instrument_port", "${SERIAL_PORT}", "--socket_ip", "${SOCKET_HOST}", "--socket_port", "${SOCKET_PORT}", "--host", "${HOST}"]
+    command: ["--instrument_port", "/dev/ttyACM0", "--socket_ip", "${SOCKET_HOST}", "--socket_port", "${SOCKET_PORT}", "--host", "${HOST}"]
   socket-mqtt:
     build:
       context: ./socket-mqtt

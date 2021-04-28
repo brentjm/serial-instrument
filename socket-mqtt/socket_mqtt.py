@@ -210,7 +210,7 @@ class SocketMqtt(object):
         # Create the publish topic outside loop
         about = self._get_device_about()
         host = about["host"]
-        topic = "spBv1.0/{}/DDATA/{}/{}".format(self._group_id, host,
+        topic = "spBv1.0/{}/NDATA/{}/{}".format(self._group_id, host,
             self._device_id)
         # Wait to finsish request about device
         sleep(2)

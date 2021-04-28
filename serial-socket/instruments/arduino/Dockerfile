@@ -1,9 +1,9 @@
-FROM python:3.7-buster
-#FROM arm32v6/python:3.7-buster
+#FROM python:3.7-buster
+FROM arm32v6/python:3.7-alpine3.11
 
-RUN adduser --system --home /home/instrument --shell /bin/sh --uid 1001 --group instrument\
-    && pip install --upgrade pip\
-    && pip install pyserial PyYAML coloredlogs numpy scipy\
+RUN addgroup -S -g 1001 instrument\
+    && adduser -S -h /home/instrument -s /bin/sh -u 1001 -g 1001 instrument\
+    && pip install pyserial PyYAML coloredlogs\ 
     && sed -i -e /dialout/s/$/,instrument/ /etc/group
 
 USER instrument
