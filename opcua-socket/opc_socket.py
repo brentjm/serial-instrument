@@ -34,15 +34,30 @@ class OpcSocket(object):
         """
         self._logger = logging.getLogger(__name__+'Socket')
         self._logger.info('OPC socket initialized.')
-        self._sock = self._connect(socket_host, socket_port)
+        self._sock = self._connect_socket(socket_host, socket_port)
 
-    
-    def _connect(self, host, port):
-        """Establish a socket connection
+
+    def _connect_socket(self, host, port):
+        """Connect to socket. Note that the socket is left
+        as blocking and shouldn't be modified unless a selector
+        is used.
+
+        Arguments:
+        host (string): hostname or IP address of host.
+        port (int): Socket server port number.
+
+        Returns a socket connection.
         """
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((host, port))
-        self._logger.debug('OPC-socket connected to socket')
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((host, port))
+        except socket.error as err:
+            self._logger.error(
+                    "Failed to connect to socket {}:{}".format(host, port))
+            raise err
+        else:
+            self._logger.info(
+                    "Connected to socket host: {}, port: {}".format(host, port))
         return sock
 
 
@@ -67,7 +82,7 @@ class SubHandler(object):
     """
     Subscription Handler. To receive events from server for a subscription
     data_change and event methods are called directly from receiving thread.
-    Do not do expensive, slow or network operation there. Create another 
+    Do not do expensive, slow or network operation there. Create another
     thread if you need to do such a thing
     """
     def __init__(self, tags, lock, sock):
@@ -81,11 +96,11 @@ class SubHandler(object):
         self._tag_config = 'CONFIG_NAME_DLV'
         self._tag_sampleName = 'STRING1_DLV'
 
-    
+
     def _compareTags(self, tag, node):
         return str(self.tags[tag]) in str(node)
 
-    
+
     def _logicBlock_1(self, node, val):
         if self._compareTags(self._tag_config, node) and len(val)>0:
             self.tags['CONFIG_NAME_PAT'].set_value(val)
@@ -110,21 +125,21 @@ class SubHandler(object):
             self.tags['INT1_PAT'].set_value(LC_status)
             self._logger.info('LC status set to: {}'.format(LC_status))
 
-    
+
     def datachange_notification(self, node, val, data):
         self._logger.debug('OPC-server data change detected with: {}, {}, {}'.format(node, val, data))
         def do_stuff(val, node, lock):
             with lock:
                 self._logicBlock_1(node, val)
                 self._logicBlock_2(node, val)
-                    
+
         threading.Thread(target=do_stuff, args=[val, node, self.lock], daemon=True).start()
-        
-    
+
+
 class OPCClient(threading.Thread):
     """Client for DeltaV.
     """
-    
+
     def __init__(self, socket_host, socket_port, endpoint):
         """Start the initial configuration for OPC client/socket service
         """
@@ -137,7 +152,7 @@ class OPCClient(threading.Thread):
 
         self._tagGroup = 'DeltaV'
         self._uri = 'http://mock.deltav.server'
-        
+
         self.sock = self._createSocket(socket_host, socket_port)
         self.client = self._connectOPCClient(endpoint)
         self.tags = self._getOPCTags()
@@ -157,14 +172,14 @@ class OPCClient(threading.Thread):
                 continue
         return client
 
-    
+
     def _createSocket(self, host, port):
         self._logger.info('Socket connection created.')
         return OpcSocket(host, port)
-    
-    
+
+
     def _getOPCTags(self):
-        
+
         root = self.client.get_root_node()
         objects = self.client.get_objects_node()
 
@@ -175,9 +190,9 @@ class OPCClient(threading.Thread):
 
             tags[tag_name] = root.get_child(['0:Objects','{}:{}'.format(idx, self._tagGroup),
                                              '{}:{}'.format(idx,tag_name)])
-        
+
         self._logger.info('OPC tags retrieved: {}'.format(tags))
-        return tags         
+        return tags
 
 
     def run(self):
@@ -188,10 +203,10 @@ class OPCClient(threading.Thread):
         """
 
         handler = SubHandler(self.tags, self.lock, self.sock)
-            
+
         sub = self.client.create_subscription(500, handler)
         handle = sub.subscribe_data_change([self.tags['CONFIG_NAME_DLV'],self.tags['STRING1_DLV']])
-        
+
 
 def setup_logger(config_file='./logger_conf.yml'):
         """Start the logger using the provided configuration file.
